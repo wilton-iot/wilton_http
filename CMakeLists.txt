@@ -18,6 +18,7 @@ elseif ( WILTON_BUILD_FLAVOUR MATCHES "wheezy" )
 elseif ( WILTON_BUILD_FLAVOUR MATCHES "el7" )
     staticlib_add_subdirectory ( ${STATICLIB_DEPS}/external_curl )
 endif ( )
+staticlib_add_subdirectory ( ${STATICLIB_DEPS}/staticlib_crypto )
 staticlib_add_subdirectory ( ${STATICLIB_DEPS}/staticlib_pion )
 staticlib_add_subdirectory ( ${STATICLIB_DEPS}/staticlib_http )
 staticlib_add_subdirectory ( ${STATICLIB_DEPS}/staticlib_mustache )
@@ -27,7 +28,6 @@ set ( ${PROJECT_NAME}_DEPS
         staticlib_config
         staticlib_support
         staticlib_io
-        staticlib_crypto
         staticlib_ranges
         staticlib_pion
         staticlib_json
@@ -37,6 +37,7 @@ set ( ${PROJECT_NAME}_DEPS
         staticlib_mustache
         staticlib_tinydir
         staticlib_pimpl
+        staticlib_crypto
         libcurl
         openssl
         zlib )
