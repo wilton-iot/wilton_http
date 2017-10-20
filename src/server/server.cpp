@@ -95,8 +95,8 @@ public:
                 if("/" == req->get_resource()) {
                     auto writer = sl::pion::http_response_writer::create(conn, req);
                     auto& resp = writer->get_response();
-                    resp.set_status_code(301);
-                    resp.set_status_message("Moved Permanently");
+                    resp.set_status_code(303);
+                    resp.set_status_message("See Other");
                     resp.change_header("Location", location);
                     writer->send();
                 } else {
