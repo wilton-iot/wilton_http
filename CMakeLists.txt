@@ -41,8 +41,7 @@ set ( ${PROJECT_NAME}_DEPS
         staticlib_pimpl
         staticlib_crypto
         libcurl
-        openssl
-        zlib )
+        openssl )
 staticlib_pkg_check_modules ( ${PROJECT_NAME}_DEPS_PC REQUIRED ${PROJECT_NAME}_DEPS )
 
 # library
@@ -55,6 +54,7 @@ if ( ${CMAKE_SYSTEM_NAME} STREQUAL "Windows" )
     set ( ${PROJECT_NAME}_RESFILE ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rc )
     set ( ${PROJECT_NAME}_DEFFILE ${CMAKE_CURRENT_LIST_DIR}/resources/${PROJECT_NAME}.def )
     list ( REMOVE_ITEM ${PROJECT_NAME}_DEPS_PC_LIBRARIES log4cplus )
+    list ( REMOVE_ITEM ${PROJECT_NAME}_DEPS_PC_LIBRARIES zlib )
 endif ( )
 
 add_library ( ${PROJECT_NAME} SHARED
@@ -77,6 +77,7 @@ add_library ( ${PROJECT_NAME} SHARED
 
 target_link_libraries ( ${PROJECT_NAME} PRIVATE
         wilton_core
+        wilton_loader
         wilton_logging
         ${${PROJECT_NAME}_DEPS_PC_LIBRARIES} )
 
@@ -84,6 +85,7 @@ target_include_directories ( ${PROJECT_NAME} BEFORE PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/src
         ${CMAKE_CURRENT_LIST_DIR}/include
         ${WILTON_DIR}/core/include
+        ${WILTON_DIR}/modules/wilton_loader/include
         ${WILTON_DIR}/modules/wilton_logging/include
         ${${PROJECT_NAME}_DEPS_PC_INCLUDE_DIRS} )
 
