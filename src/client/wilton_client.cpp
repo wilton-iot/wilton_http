@@ -20,12 +20,15 @@
 #include "staticlib/tinydir.hpp"
 
 #include "wilton/support/alloc_copy.hpp"
+#include "wilton/support/logging.hpp"
 
 #include "client/client_response.hpp"
 #include "client/client_request_config.hpp"
 #include "client/client_session_config.hpp"
 
 namespace { // anonymous
+
+const std::string LOGGER = std::string("wilton.httpClient");
 
 std::string resp_to_json(wilton::client::client_request_config& opts, sl::http::resource& resp) {
     auto data_str = std::string();
@@ -122,11 +125,13 @@ char* wilton_HttpClient_execute(
     if (!sl::support::is_uint32(request_metadata_len)) return wilton::support::alloc_copy(TRACEMSG(
             "Invalid 'request_metadata_len' parameter specified: [" + sl::support::to_string(request_metadata_len) + "]"));
     try {
-        std::string url_str{url, static_cast<uint32_t> (url_len)};
-        sl::json::value opts_json{};
+        auto url_str = std::string(url, static_cast<uint32_t> (url_len));
+        auto opts_json = sl::json::value();
         if (request_metadata_len > 0) {
             opts_json = sl::json::load({request_metadata_json, request_metadata_len});
         }
+        wilton::support::log_debug(LOGGER, "Performing HTTP request, URL: [" + url_str + "]," +
+                " options: [" + opts_json.dumps() + "] ...");
         auto opts = wilton::client::client_request_config(std::move(opts_json));
         sl::http::resource resp = [&] {
             if (request_data_len > 0) {
@@ -142,6 +147,8 @@ char* wilton_HttpClient_execute(
                 return http->impl().open_url(url_str, opts.options);
             }
         }();
+        wilton::support::log_debug(LOGGER,
+                "HTTP request complete, status code: [" + sl::support::to_string(resp.get_status_code()) + "]");
         std::string resp_complete = resp_to_json(opts, resp);
         *response_data_out = wilton::support::alloc_copy(resp_complete);
         *response_data_len_out = static_cast<int>(resp_complete.length());
@@ -175,19 +182,23 @@ char* wilton_HttpClient_send_file(
     if (!sl::support::is_uint32(request_metadata_len)) return wilton::support::alloc_copy(TRACEMSG(
             "Invalid 'request_metadata_len' parameter specified: [" + sl::support::to_string(request_metadata_len) + "]"));
     try {
-        std::string url_str{url, static_cast<uint32_t> (url_len)};
-        sl::json::value opts_json{};
+        auto url_str = std::string(url, static_cast<uint32_t> (url_len));
+        auto file_path_str = std::string(file_path, static_cast<uint32_t> (file_path_len));
+        auto opts_json = sl::json::value();
         if (request_metadata_len > 0) {
             std::string meta_str{request_metadata_json, static_cast<uint32_t> (request_metadata_len)};
             opts_json = sl::json::loads(meta_str);
         }
+        wilton::support::log_debug(LOGGER, "Sending file over HTTP, URL: [" + url_str + "]," +
+                " file: [" + file_path_str + "], options: [" + opts_json.dumps() + "] ...");
         wilton::client::client_request_config opts{std::move(opts_json)};
-        std::string file_path_str{file_path, static_cast<uint32_t> (file_path_len)};
         auto fd = sl::tinydir::file_source(file_path_str);
         // do not use chunked post, as length is known
         opts.options.send_request_body_content_length = true;
         opts.options.request_body_content_length = static_cast<uint32_t>(fd.size());
         sl::http::resource resp = http->impl().open_url(url_str, std::move(fd), opts.options);
+        wilton::support::log_debug(LOGGER,
+                "HTTP file send complete, status code: [" + sl::support::to_string(resp.get_status_code()) + "]");
         std::string resp_complete = resp_to_json(opts, resp);
         if (nullptr != finalizer_cb) {
             finalizer_cb(finalizer_ctx, 1);
