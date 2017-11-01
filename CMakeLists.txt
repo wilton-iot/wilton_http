@@ -9,13 +9,13 @@ set ( staticlib_pion_USE_LOG4CPLUS ON CACHE BOOL "Use log4cplus lib for logging"
 set ( staticlib_pion_USE_OPENSSL ON CACHE BOOL "Use OpenSSL lib for https" )
 
 # dependencies add
+if ( STATICLIB_TOOLCHAIN MATCHES "windows_.+" )
+    staticlib_add_subdirectory ( ${STATICLIB_DEPS}/external_zlib )
+endif ( )
 if ( STATICLIB_TOOLCHAIN MATCHES "(android|windows)_.+" )
     staticlib_add_subdirectory ( ${STATICLIB_DEPS}/external_openssl )
     staticlib_add_subdirectory ( ${STATICLIB_DEPS}/external_curl )
     staticlib_add_subdirectory ( ${STATICLIB_DEPS}/external_asio )
-endif ( )
-if ( STATICLIB_TOOLCHAIN MATCHES "windows_.+" )
-    staticlib_add_subdirectory ( ${STATICLIB_DEPS}/external_zlib )
 elseif ( WILTON_BUILD_FLAVOUR MATCHES "wheezy" )
     staticlib_add_subdirectory ( ${STATICLIB_DEPS}/external_asio )
 elseif ( WILTON_BUILD_FLAVOUR MATCHES "el7" )
