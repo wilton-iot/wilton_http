@@ -5,6 +5,7 @@
  * Created on January 11, 2017, 10:05 AM
  */
 
+#include <cstdio>
 #include <list>
 #include <string>
 #include <vector>

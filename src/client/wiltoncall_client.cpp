@@ -5,6 +5,7 @@
  * Created on January 10, 2017, 5:40 PM
  */
 
+#include <cstdio>
 #include <memory>
 #include <string>
 
