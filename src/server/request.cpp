@@ -111,7 +111,7 @@ public:
 
     void send_response(request&, const char* data, uint32_t data_len) {
         auto state_expected = request_state::created;
-        if (!state.compare_exchange_strong(state_expected, request_state::committed)) throw support::exception(TRACEMSG(
+        if (!state.compare_exchange_strong(state_expected, request_state::committed, std::memory_order_acq_rel)) throw support::exception(TRACEMSG(
                 "Invalid request lifecycle operation, request is already committed"));
         resp->write(data, data_len);
         resp->send();
@@ -120,7 +120,7 @@ public:
     void send_file(request&, std::string file_path, std::function<void(bool)> finalizer) {
         auto fd = sl::tinydir::file_source(file_path);
         auto state_expected = request_state::created;
-        if (!state.compare_exchange_strong(state_expected, request_state::committed)) throw support::exception(TRACEMSG(
+        if (!state.compare_exchange_strong(state_expected, request_state::committed, std::memory_order_acq_rel)) throw support::exception(TRACEMSG(
                 "Invalid request lifecycle operation, request is already committed"));
         auto fd_ptr = std::unique_ptr<std::streambuf>(sl::io::make_unbuffered_istreambuf_ptr(std::move(fd)));
         auto sender = std::make_shared<response_stream_sender>(resp, std::move(fd_ptr), std::move(finalizer));
@@ -129,7 +129,7 @@ public:
 
     void send_mustache(request&, std::string mustache_file_path, sl::json::value json) {
         auto state_expected = request_state::created;
-        if (!state.compare_exchange_strong(state_expected, request_state::committed)) throw support::exception(TRACEMSG(
+        if (!state.compare_exchange_strong(state_expected, request_state::committed, std::memory_order_acq_rel)) throw support::exception(TRACEMSG(
                 "Invalid request lifecycle operation, request is already committed"));
         std::string mpath = [&mustache_file_path] () -> std::string {
             if (sl::utils::starts_with(mustache_file_path, support::file_proto_prefix)) {
@@ -145,7 +145,7 @@ public:
     
     response_writer send_later(request&) {
         auto state_expected = request_state::created;
-        if (!state.compare_exchange_strong(state_expected, request_state::committed)) throw support::exception(TRACEMSG(
+        if (!state.compare_exchange_strong(state_expected, request_state::committed, std::memory_order_acq_rel)) throw support::exception(TRACEMSG(
                 "Invalid request lifecycle operation, request is already committed"));
         sl::pion::http_response_writer_ptr writer = this->resp;
         return response_writer{static_cast<void*>(std::addressof(writer))};
@@ -153,7 +153,7 @@ public:
 
     void finish(request&) {
         auto state_expected = request_state::created;
-        if (state.compare_exchange_strong(state_expected, request_state::committed)) {
+        if (state.compare_exchange_strong(state_expected, request_state::committed, std::memory_order_acq_rel)) {
             resp->send();
         }
     }
