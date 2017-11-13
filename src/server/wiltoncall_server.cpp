@@ -7,6 +7,7 @@
 
 #include <cstdio>
 #include <list>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -96,8 +97,8 @@ public:
 };
 
 
-support::handle_registry<wilton_Request>& static_request_registry() {
-    static support::handle_registry<wilton_Request> registry{
+std::shared_ptr<support::handle_registry<wilton_Request>> shared_request_registry() {
+    static auto registry = std::make_shared<support::handle_registry<wilton_Request>>(
         [] (wilton_Request* request) STATICLIB_NOEXCEPT {
             static std::string conf = sl::json::dumps({
                 { "statusCode", 503 },
@@ -105,27 +106,25 @@ support::handle_registry<wilton_Request>& static_request_registry() {
             });
             wilton_Request_set_response_metadata(request, conf.c_str(), static_cast<int> (conf.length()));
             wilton_Request_send_response(request, "", 0);
-        }
-    };
+        });
     return registry;
 }
 
-support::payload_handle_registry<wilton_Server, server_ctx>& static_server_registry() {
+std::shared_ptr<support::payload_handle_registry<wilton_Server, server_ctx>> shared_server_registry() {
     // init/destroy order attempt, todo: verifyme
-    static_request_registry();
-    static support::payload_handle_registry<wilton_Server, server_ctx> registry{
+    shared_request_registry();
+    static auto registry = std::make_shared<support::payload_handle_registry<wilton_Server, server_ctx>>(
         [] (wilton_Server * server) STATICLIB_NOEXCEPT {
             wilton_Server_stop(server);
-        }
-    };
+        });
     return registry;
 }
 
-support::handle_registry<wilton_ResponseWriter>& static_response_writer_registry() {
-    static support::handle_registry<wilton_ResponseWriter> registry {
+std::shared_ptr<support::handle_registry<wilton_ResponseWriter>> shared_response_writer_registry() {
+    static auto registry = std::make_shared<support::handle_registry<wilton_ResponseWriter>>(
         [] (wilton_ResponseWriter* writer) STATICLIB_NOEXCEPT {
             wilton_ResponseWriter_send(writer, "", 0);
-        }};
+        });
     return registry;
 }
 
@@ -162,7 +161,8 @@ std::vector<http_view> extract_and_delete_views(sl::json::value& conf) {
 }
 
 void send_system_error(int64_t requestHandle, std::string errmsg) {
-    wilton_Request* request = static_request_registry().remove(requestHandle);
+    auto rreg = shared_request_registry();
+    wilton_Request* request = rreg->remove(requestHandle);
     if (nullptr != request) {
         static std::string conf = sl::json::dumps({
             { "statusCode", 500 },
@@ -170,7 +170,7 @@ void send_system_error(int64_t requestHandle, std::string errmsg) {
         });
         wilton_Request_set_response_metadata(request, conf.c_str(), static_cast<int>(conf.length()));
         wilton_Request_send_response(request, errmsg.c_str(), static_cast<int>(errmsg.length()));
-        static_request_registry().put(request);
+        rreg->put(request);
     }
 }
 
@@ -179,6 +179,7 @@ std::vector<std::unique_ptr<wilton_HttpPath, http_path_deleter>> create_paths(
     // assert(views.size() == ctx.get_modules_names().size())
     std::vector<std::unique_ptr<wilton_HttpPath, http_path_deleter>> res;
     for (auto& vi : views) {
+        // todo: think, maybe pass registries here too
         sl::json::value& cbs_to_pass = ctx.add_callback(vi.callbackScript);
         wilton_HttpPath* ptr = nullptr;
         auto err = wilton_HttpPath_create(std::addressof(ptr), 
@@ -186,7 +187,8 @@ std::vector<std::unique_ptr<wilton_HttpPath, http_path_deleter>> create_paths(
                 vi.path.c_str(), static_cast<int>(vi.path.length()),
                 static_cast<void*> (std::addressof(cbs_to_pass)),
                 [](void* passed, wilton_Request* request) {
-                    int64_t requestHandle = static_request_registry().put(request);
+                    auto rreg = shared_request_registry();
+                    int64_t requestHandle = rreg->put(request);
                     sl::json::value* cb_ptr = static_cast<sl::json::value*> (passed);
                     sl::json::value params = cb_ptr->clone();
                     // params structure is pre-checked
@@ -217,7 +219,7 @@ std::vector<std::unique_ptr<wilton_HttpPath, http_path_deleter>> create_paths(
                         support::log_error("wilton.server", msg);
                         send_system_error(requestHandle, msg);
                     }
-                    static_request_registry().remove(requestHandle);
+                    rreg->remove(requestHandle);
                 });
         if (nullptr != err) throw support::exception(TRACEMSG(err));
         res.emplace_back(ptr, http_path_deleter());
@@ -247,7 +249,8 @@ support::buffer server_create(sl::io::span<const char> data) {
             conf.c_str(), static_cast<int>(conf.length()), 
             paths_pass.data(), static_cast<int>(paths_pass.size()));
     if (nullptr != err) support::throw_wilton_error(err, TRACEMSG(err));
-    int64_t handle = static_server_registry().put(server, std::move(ctx));
+    auto sreg = shared_server_registry();
+    int64_t handle = sreg->put(server, std::move(ctx));
     return support::make_json_buffer({
         { "serverHandle", handle}
     });
@@ -268,13 +271,14 @@ support::buffer server_stop(sl::io::span<const char> data) {
     if (-1 == handle) throw support::exception(TRACEMSG(
             "Required parameter 'serverHandle' not specified"));
     // get handle
-    auto pa = static_server_registry().remove(handle);
+    auto sreg = shared_server_registry();
+    auto pa = sreg->remove(handle);
     if (nullptr == pa.first) throw support::exception(TRACEMSG(
             "Invalid 'serverHandle' parameter specified"));
     // call wilton
     char* err = wilton_Server_stop(pa.first);
     if (nullptr != err) {
-        static_server_registry().put(pa.first, std::move(pa.second));
+        sreg->put(pa.first, std::move(pa.second));
         support::throw_wilton_error(err, TRACEMSG(err));
     }
     return support::make_empty_buffer();
@@ -295,7 +299,8 @@ support::buffer request_get_metadata(sl::io::span<const char> data) {
     if (-1 == handle) throw support::exception(TRACEMSG(
             "Required parameter 'requestHandle' not specified"));
     // get handle
-    wilton_Request* request = static_request_registry().remove(handle);
+    auto rreg = shared_request_registry();
+    wilton_Request* request = rreg->remove(handle);
     if (nullptr == request) throw support::exception(TRACEMSG(
             "Invalid 'requestHandle' parameter specified"));
     // call wilton
@@ -303,7 +308,7 @@ support::buffer request_get_metadata(sl::io::span<const char> data) {
     int out_len = 0;
     char* err = wilton_Request_get_request_metadata(request,
             std::addressof(out), std::addressof(out_len));
-    static_request_registry().put(request);
+    rreg->put(request);
     if (nullptr != err) {
         support::throw_wilton_error(err, TRACEMSG(err));
     }
@@ -325,7 +330,8 @@ support::buffer request_get_data(sl::io::span<const char> data) {
     if (-1 == handle) throw support::exception(TRACEMSG(
             "Required parameter 'requestHandle' not specified"));
     // get handle
-    wilton_Request* request = static_request_registry().remove(handle);
+    auto rreg = shared_request_registry();
+    wilton_Request* request = rreg->remove(handle);
     if (nullptr == request) throw support::exception(TRACEMSG(
             "Invalid 'requestHandle' parameter specified"));
     // call wilton
@@ -333,7 +339,7 @@ support::buffer request_get_data(sl::io::span<const char> data) {
     int out_len = 0;
     char* err = wilton_Request_get_request_data(request,
             std::addressof(out), std::addressof(out_len));
-    static_request_registry().put(request);
+    rreg->put(request);
     if (nullptr != err) support::throw_wilton_error(err, TRACEMSG(err));
     return support::wrap_wilton_buffer(out, out_len);
 }
@@ -353,7 +359,8 @@ support::buffer request_get_form_data(sl::io::span<const char> data) {
     if (-1 == handle) throw support::exception(TRACEMSG(
             "Required parameter 'requestHandle' not specified"));
     // get handle
-    wilton_Request* request = static_request_registry().remove(handle);
+    auto rreg = shared_request_registry();
+    wilton_Request* request = rreg->remove(handle);
     if (nullptr == request) throw support::exception(TRACEMSG(
             "Invalid 'requestHandle' parameter specified"));
     // call wilton
@@ -361,7 +368,7 @@ support::buffer request_get_form_data(sl::io::span<const char> data) {
     int out_len = 0;
     char* err = wilton_Request_get_request_form_data(request,
             std::addressof(out), std::addressof(out_len));
-    static_request_registry().put(request);
+    rreg->put(request);
     if (nullptr != err) support::throw_wilton_error(err, TRACEMSG(err));
     return support::wrap_wilton_buffer(out, out_len);
 }
@@ -381,7 +388,8 @@ support::buffer request_get_data_filename(sl::io::span<const char> data) {
     if (-1 == handle) throw support::exception(TRACEMSG(
             "Required parameter 'requestHandle' not specified"));
     // get handle
-    wilton_Request* request = static_request_registry().remove(handle);
+    auto rreg = shared_request_registry();
+    wilton_Request* request = rreg->remove(handle);
     if (nullptr == request) throw support::exception(TRACEMSG(
             "Invalid 'requestHandle' parameter specified"));
     // call wilton
@@ -389,7 +397,7 @@ support::buffer request_get_data_filename(sl::io::span<const char> data) {
     int out_len = 0;
     char* err = wilton_Request_get_request_data_filename(request,
             std::addressof(out), std::addressof(out_len));
-    static_request_registry().put(request);
+    rreg->put(request);
     if (nullptr != err) support::throw_wilton_error(err, TRACEMSG(err));
     return support::wrap_wilton_buffer(out, out_len);
 }
@@ -414,12 +422,13 @@ support::buffer request_set_response_metadata(sl::io::span<const char> data) {
     if (metadata.empty()) throw support::exception(TRACEMSG(
             "Required parameter 'metadata' not specified"));
     // get handle
-    wilton_Request* request = static_request_registry().remove(handle);
+    auto rreg = shared_request_registry();
+    wilton_Request* request = rreg->remove(handle);
     if (nullptr == request) throw support::exception(TRACEMSG(
             "Invalid 'requestHandle' parameter specified"));
     // call wilton
     char* err = wilton_Request_set_response_metadata(request, metadata.c_str(), static_cast<int>(metadata.length()));
-    static_request_registry().put(request);
+    rreg->put(request);
     if (nullptr != err) support::throw_wilton_error(err, TRACEMSG(err));
     return support::make_empty_buffer();
 }
@@ -443,12 +452,13 @@ support::buffer request_send_response(sl::io::span<const char> data) {
             "Required parameter 'requestHandle' not specified"));
     const std::string& request_data = rdata.get().empty() ? "{}" : rdata.get();
     // get handle
-    wilton_Request* request = static_request_registry().remove(handle);
+    auto rreg = shared_request_registry();
+    wilton_Request* request = rreg->remove(handle);
     if (nullptr == request) throw support::exception(TRACEMSG(
             "Invalid 'requestHandle' parameter specified"));
     // call wilton
     char* err = wilton_Request_send_response(request, request_data.c_str(), static_cast<int>(request_data.length()));
-    static_request_registry().put(request);
+    rreg->put(request);
     if (nullptr != err) support::throw_wilton_error(err, TRACEMSG(err));
     return support::make_empty_buffer();
 }
@@ -473,7 +483,8 @@ support::buffer request_send_temp_file(sl::io::span<const char> data) {
     if (file.empty()) throw support::exception(TRACEMSG(
             "Required parameter 'filePath' not specified"));
     // get handle
-    wilton_Request* request = static_request_registry().remove(handle);
+    auto rreg = shared_request_registry();
+    wilton_Request* request = rreg->remove(handle);
     if (nullptr == request) throw support::exception(TRACEMSG(
             "Invalid 'requestHandle' parameter specified"));
     // call wilton
@@ -484,7 +495,7 @@ support::buffer request_send_temp_file(sl::io::span<const char> data) {
                 std::remove(filePath_passed->c_str());
                 delete filePath_passed;
             });
-    static_request_registry().put(request);
+    rreg->put(request);
     if (nullptr != err) support::throw_wilton_error(err, TRACEMSG(err));
     return support::make_empty_buffer();
 }
@@ -516,13 +527,14 @@ support::buffer request_send_mustache(sl::io::span<const char> data) {
     }
     const std::string& file = rfile.get();
     // get handle
-    wilton_Request* request = static_request_registry().remove(handle);
+    auto rreg = shared_request_registry();
+    wilton_Request* request = rreg->remove(handle);
     if (nullptr == request) throw support::exception(TRACEMSG(
             "Invalid 'requestHandle' parameter specified"));
     // call wilton
     char* err = wilton_Request_send_mustache(request, file.c_str(), static_cast<int>(file.length()),
             values.c_str(), static_cast<int>(values.length()));
-    static_request_registry().put(request);
+    rreg->put(request);
     if (nullptr != err) support::throw_wilton_error(err, TRACEMSG(err));
     return support::make_empty_buffer();
 }
@@ -542,15 +554,17 @@ support::buffer request_send_later(sl::io::span<const char> data) {
     if (-1 == handle) throw support::exception(TRACEMSG(
             "Required parameter 'requestHandle' not specified"));
     // get handle
-    wilton_Request* request = static_request_registry().remove(handle);
+    auto rreg = shared_request_registry();
+    wilton_Request* request = rreg->remove(handle);
     if (nullptr == request) throw support::exception(TRACEMSG(
             "Invalid 'requestHandle' parameter specified"));
     // call wilton
     wilton_ResponseWriter* writer;
     char* err = wilton_Request_send_later(request, std::addressof(writer));
-    static_request_registry().put(request);
+    rreg->put(request);
     if (nullptr != err) support::throw_wilton_error(err, TRACEMSG(err));
-    int64_t rwhandle = static_response_writer_registry().put(writer);
+    auto wreg = shared_response_writer_registry();
+    int64_t rwhandle = wreg->put(writer);
     return support::make_json_buffer({
         { "responseWriterHandle", rwhandle}
     });
@@ -575,7 +589,8 @@ support::buffer request_send_with_response_writer(sl::io::span<const char> data)
             "Required parameter 'responseWriterHandle' not specified"));
     const std::string& request_data = rdata.get().empty() ? "{}" : rdata.get();
     // get handle, note: won't be put back - one-off operation   
-    wilton_ResponseWriter* writer = static_response_writer_registry().remove(handle);
+    auto wreg = shared_response_writer_registry();
+    wilton_ResponseWriter* writer = wreg->remove(handle);
     if (nullptr == writer) throw support::exception(TRACEMSG(
             "Invalid 'responseWriterHandle' parameter specified"));
     // call wilton

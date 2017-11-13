@@ -24,13 +24,13 @@ namespace client {
 
 namespace { //anonymous
 
-wilton_HttpClient* static_client() {
-    static std::string cfg = sl::json::dumps({
-        {"multiThreaded", true} 
-    });
-    static std::unique_ptr<wilton_HttpClient, std::function<void(wilton_HttpClient*)>> client = 
+std::shared_ptr<wilton_HttpClient> shared_client() {
+    static std::shared_ptr<wilton_HttpClient> client =
             std::unique_ptr<wilton_HttpClient, std::function<void(wilton_HttpClient*)>>(
             []{
+                std::string cfg = sl::json::dumps({
+                    {"multiThreaded", true} 
+                });
                 wilton_HttpClient* http;
                 char* err = wilton_HttpClient_create(std::addressof(http), cfg.data(), static_cast<int> (cfg.size()));
                 if (nullptr != err) {
@@ -41,7 +41,7 @@ wilton_HttpClient* static_client() {
             [] (wilton_HttpClient* http) {
                 wilton_HttpClient_close(http);
             });
-    return client.get();
+    return client;
 }
 
 } // namespace
@@ -69,9 +69,10 @@ support::buffer httpclient_send_request(sl::io::span<const char> data) {
     const std::string& url = rurl.get();
     const std::string& request_data = rdata.get();
     // call wilton
+    auto cl = shared_client();
     char* out = nullptr;
     int out_len = 0;
-    char* err = wilton_HttpClient_execute(static_client(), url.c_str(), static_cast<int>(url.length()),
+    char* err = wilton_HttpClient_execute(cl.get(), url.c_str(), static_cast<int>(url.length()),
             request_data.c_str(), static_cast<int>(request_data.length()), 
             metadata.c_str(), static_cast<int>(metadata.length()),
             std::addressof(out), std::addressof(out_len));
@@ -107,10 +108,11 @@ support::buffer httpclient_send_file(sl::io::span<const char> data) {
     const std::string& url = rurl.get();
     const std::string& file_path = rfile.get();
     // call wilton
+    auto cl = shared_client();
     char* out = nullptr;
     int out_len = 0;
     std::string* pass_ctx = rem ? new std::string(file_path.data(), file_path.length()) : new std::string();
-    char* err = wilton_HttpClient_send_file(static_client(), url.c_str(), static_cast<int>(url.length()),
+    char* err = wilton_HttpClient_send_file(cl.get(), url.c_str(), static_cast<int>(url.length()),
             file_path.c_str(), static_cast<int>(file_path.length()), 
             metadata.c_str(), static_cast<int>(metadata.length()),
             std::addressof(out), std::addressof(out_len),
