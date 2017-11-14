@@ -39,7 +39,13 @@ std::shared_ptr<wilton_HttpClient> shared_client() {
                 return http;
             }(),
             [] (wilton_HttpClient* http) {
+#ifndef STATICLIB_WINDOWS
                 wilton_HttpClient_close(http);
+#else // STATICLIB_WINDOWS
+                // client destructor takes mutices and
+                // msvcr doesn't like that in JNI mode
+                (void) http;
+#endif // STATICLIB_WINDOWS
             });
     return client;
 }
