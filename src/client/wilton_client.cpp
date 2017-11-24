@@ -31,20 +31,22 @@ namespace { // anonymous
 const std::string LOGGER = std::string("wilton.httpClient");
 
 std::string resp_to_json(wilton::client::client_request_config& opts, sl::http::resource& resp) {
-    auto data_str = std::string();
+    auto data_hex = std::string();
     if (opts.respone_data_file_path.empty()) {
         auto sink = sl::io::string_sink();
-        sl::io::copy_all(resp, sink);
-        data_str = sink.get_string();
+        sl::io::copy_to_hex(resp, sink);
+        data_hex = sink.get_string();
     } else {
         auto sink = sl::tinydir::file_sink(opts.respone_data_file_path);
         sl::io::copy_all(resp, sink);
-        data_str = sl::json::dumps({
+        auto data_str = sl::json::dumps({
             {"responseDataFilePath", opts.respone_data_file_path}
         });
+        auto dsrc = sl::io::string_source(data_str);
+        auto sink_hex = sl::io::string_sink();
+        sl::io::copy_to_hex(dsrc, sink_hex);
+        data_hex = sink_hex.get_string();
     }
-    // todo: streaming, utf-8 validation
-    auto data_hex = sl::crypto::to_hex(data_str);
     auto resp_json = wilton::client::client_response::to_json(std::move(data_hex), resp, resp.get_info());
     return resp_json.dumps();
 }
