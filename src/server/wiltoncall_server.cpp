@@ -140,9 +140,9 @@ std::vector<http_view> extract_and_delete_views(sl::json::value& conf) {
             if (sl::json::type::array != fi.json_type()) throw support::exception(TRACEMSG(
                     "Invalid configuration object specified: 'views' attr is not a list," +
                     " conf: [" + conf.dumps() + "]"));
-            if (0 == fi.as_array().size()) throw support::exception(TRACEMSG(
-                    "Invalid configuration object specified: 'views' attr is am empty list," +
-                    " conf: [" + conf.dumps() + "]"));
+//            if (0 == fi.as_array().size()) throw support::exception(TRACEMSG(
+//                    "Invalid configuration object specified: 'views' attr is am empty list," +
+//                    " conf: [" + conf.dumps() + "]"));
             for (auto& va : fi.as_array()) {
                 if (sl::json::type::object != va.json_type()) throw support::exception(TRACEMSG(
                         "Invalid configuration object specified: 'views' is not a 'object'," +

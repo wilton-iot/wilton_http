@@ -133,9 +133,9 @@ char* wilton_Server_create /* noexcept */ (wilton_Server** server_out, const cha
     if (nullptr == conf_json) return wilton::support::alloc_copy(TRACEMSG("Null 'conf_json' parameter specified"));
     if (!sl::support::is_uint32_positive(conf_json_len)) return wilton::support::alloc_copy(TRACEMSG(
             "Invalid 'conf_json_len' parameter specified: [" + sl::support::to_string(conf_json_len) + "]"));
-    if (nullptr == paths) return wilton::support::alloc_copy(TRACEMSG("Null 'paths' parameter specified"));
-    if (!sl::support::is_uint16_positive(paths_len)) return wilton::support::alloc_copy(TRACEMSG(
+    if (!sl::support::is_uint16(paths_len)) return wilton::support::alloc_copy(TRACEMSG(
             "Invalid 'paths_len' parameter specified: [" + sl::support::to_string(paths_len) + "]"));
+    if (sl::support::is_uint16_positive(paths_len) && nullptr == paths) return wilton::support::alloc_copy(TRACEMSG("Null 'paths' parameter specified"));
     try {
         sl::json::value json = sl::json::load({conf_json, conf_json_len});
         uint16_t paths_len_u16 = static_cast<uint16_t>(paths_len);
