@@ -12,7 +12,6 @@
 #include <string>
 
 #include "staticlib/config.hpp"
-#include "staticlib/crypto.hpp"
 #include "staticlib/http.hpp"
 #include "staticlib/io.hpp"
 #include "staticlib/json.hpp"
@@ -22,9 +21,9 @@
 #include "wilton/support/alloc_copy.hpp"
 #include "wilton/support/logging.hpp"
 
-#include "client/client_response.hpp"
-#include "client/client_request_config.hpp"
-#include "client/client_session_config.hpp"
+#include "client_response.hpp"
+#include "client_request_config.hpp"
+#include "client_session_config.hpp"
 
 namespace { // anonymous
 
