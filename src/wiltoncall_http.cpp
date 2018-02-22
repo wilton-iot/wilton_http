@@ -48,7 +48,7 @@ std::shared_ptr<wilton_HttpClient> shared_client() {
                     {"multiThreaded", true} 
                 });
                 wilton_HttpClient* http;
-                char* err = wilton_HttpClient_create(std::addressof(http), cfg.data(), static_cast<int> (cfg.size()));
+                char* err = wilton_HttpClient_create(std::addressof(http), cfg.data(), static_cast<int> (cfg.length()));
                 if (nullptr != err) {
                     support::throw_wilton_error(err, TRACEMSG(err));
                 }

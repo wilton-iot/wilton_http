@@ -34,7 +34,7 @@
 #include "staticlib/utils.hpp"
 #include "staticlib/tinydir.hpp"
 
-#include "wilton/support/alloc_copy.hpp"
+#include "wilton/support/alloc.hpp"
 #include "wilton/support/logging.hpp"
 
 #include "client_response.hpp"
