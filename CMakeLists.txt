@@ -38,10 +38,6 @@ set ( ${PROJECT_NAME}_DEPS
         staticlib_tinydir
         staticlib_pimpl
         libcurl )
-# todo: removeme
-if ( STATICLIB_TOOLCHAIN MATCHES "(macosx)_.+" )
-    list ( APPEND ${PROJECT_NAME}_DEPS openssl )
-endif ( )
 staticlib_pkg_check_modules ( ${PROJECT_NAME}_DEPS_PC REQUIRED ${PROJECT_NAME}_DEPS )
 
 # library
@@ -74,7 +70,7 @@ if ( STATICLIB_TOOLCHAIN MATCHES "(linux)_.+" )
     target_link_libraries ( ${PROJECT_NAME} PRIVATE
             z )
 endif ( )
-if ( STATICLIB_TOOLCHAIN MATCHES "(linux|maxosx)_.+" )
+if ( STATICLIB_TOOLCHAIN MATCHES "linux_.+" )
     target_link_libraries ( ${PROJECT_NAME} PRIVATE
             crypto ssl )
 endif ( )
@@ -94,9 +90,6 @@ if ( STATICLIB_TOOLCHAIN MATCHES "android_.+" )
 elseif ( STATICLIB_TOOLCHAIN MATCHES "windows_.+" )
     target_link_libraries ( ${PROJECT_NAME} PRIVATE wtsapi32 )
     set_property ( TARGET ${PROJECT_NAME} APPEND_STRING PROPERTY LINK_FLAGS "/manifest:no" )
-elseif ( STATICLIB_TOOLCHAIN MATCHES "macosx_.+" )
-    get_property ( ${PROJECT_NAME}_LINK_FLAGS TARGET ${PROJECT_NAME} PROPERTY LINK_FLAGS )
-    set_property ( TARGET ${PROJECT_NAME} PROPERTY LINK_FLAGS "-L${${PROJECT_NAME}_DEPS_PC_openssl_LIBDIR} ${${PROJECT_NAME}_LINK_FLAGS}" )
 endif ( )
 
 # pkg-config
