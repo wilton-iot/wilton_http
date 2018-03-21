@@ -43,7 +43,7 @@
 
 namespace { // anonymous
 
-const std::string LOGGER = std::string("wilton.httpClient");
+const std::string logger = std::string("wilton.httpClient");
 
 std::string resp_to_json(wilton::client::client_request_config& opts, sl::http::resource& resp) {
     auto data_hex = std::string();
@@ -147,7 +147,7 @@ char* wilton_HttpClient_execute(
         if (request_metadata_len > 0) {
             opts_json = sl::json::load({request_metadata_json, request_metadata_len});
         }
-        wilton::support::log_debug(LOGGER, "Performing HTTP request, URL: [" + url_str + "]," +
+        wilton::support::log_debug(logger, "Performing HTTP request, URL: [" + url_str + "]," +
                 " options: [" + opts_json.dumps() + "] ...");
         auto opts = wilton::client::client_request_config(std::move(opts_json));
         sl::http::resource resp = [&] {
@@ -164,7 +164,7 @@ char* wilton_HttpClient_execute(
                 return http->impl().open_url(url_str, opts.options);
             }
         }();
-        wilton::support::log_debug(LOGGER,
+        wilton::support::log_debug(logger,
                 "HTTP request complete, status code: [" + sl::support::to_string(resp.get_status_code()) + "]");
         std::string resp_complete = resp_to_json(opts, resp);
         *response_data_out = wilton::support::alloc_copy(resp_complete);
@@ -206,7 +206,7 @@ char* wilton_HttpClient_send_file(
             std::string meta_str{request_metadata_json, static_cast<uint32_t> (request_metadata_len)};
             opts_json = sl::json::loads(meta_str);
         }
-        wilton::support::log_debug(LOGGER, "Sending file over HTTP, URL: [" + url_str + "]," +
+        wilton::support::log_debug(logger, "Sending file over HTTP, URL: [" + url_str + "]," +
                 " file: [" + file_path_str + "], options: [" + opts_json.dumps() + "] ...");
         wilton::client::client_request_config opts{std::move(opts_json)};
         auto fd = sl::tinydir::file_source(file_path_str);
@@ -214,7 +214,7 @@ char* wilton_HttpClient_send_file(
         opts.options.send_request_body_content_length = true;
         opts.options.request_body_content_length = static_cast<uint32_t>(fd.size());
         sl::http::resource resp = http->impl().open_url(url_str, std::move(fd), opts.options);
-        wilton::support::log_debug(LOGGER,
+        wilton::support::log_debug(logger,
                 "HTTP file send complete, status code: [" + sl::support::to_string(resp.get_status_code()) + "]");
         std::string resp_complete = resp_to_json(opts, resp);
         if (nullptr != finalizer_cb) {
