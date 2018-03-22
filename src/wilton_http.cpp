@@ -45,7 +45,7 @@ namespace { // anonymous
 
 const std::string logger = std::string("wilton.httpClient");
 
-std::string resp_to_json(wilton::client::client_request_config& opts, sl::http::resource& resp) {
+std::string resp_to_json(wilton::http::client_request_config& opts, sl::http::resource& resp) {
     auto data_hex = std::string();
     if (opts.respone_data_file_path.empty()) {
         auto sink = sl::io::string_sink();
@@ -62,7 +62,7 @@ std::string resp_to_json(wilton::client::client_request_config& opts, sl::http::
         sl::io::copy_to_hex(dsrc, sink_hex);
         data_hex = sink_hex.get_string();
     }
-    auto resp_json = wilton::client::client_response::to_json(std::move(data_hex), resp, resp.get_info());
+    auto resp_json = wilton::http::client_response::to_json(std::move(data_hex), resp, resp.get_info());
     return resp_json.dumps();
 }
 
@@ -96,7 +96,7 @@ char* wilton_HttpClient_create(
         uint32_t conf_json_len_u32 = static_cast<uint32_t> (conf_json_len);
         std::string json_str{conf_json, conf_json_len_u32};
         sl::json::value json = sl::json::loads(json_str);
-        wilton::client::client_session_config conf{std::move(json)};
+        wilton::http::client_session_config conf{std::move(json)};
         wilton_HttpClient* http_ptr = nullptr;
         if (conf.use_multi_threaded_session) {
             http_ptr = new wilton_HttpClient(sl::http::multi_threaded_session(std::move(conf.options)));
@@ -149,7 +149,7 @@ char* wilton_HttpClient_execute(
         }
         wilton::support::log_debug(logger, "Performing HTTP request, URL: [" + url_str + "]," +
                 " options: [" + opts_json.dumps() + "] ...");
-        auto opts = wilton::client::client_request_config(std::move(opts_json));
+        auto opts = wilton::http::client_request_config(std::move(opts_json));
         sl::http::resource resp = [&] {
             if (request_data_len > 0) {
                 auto reqlen_u32 = static_cast<uint32_t> (request_data_len);
@@ -208,7 +208,7 @@ char* wilton_HttpClient_send_file(
         }
         wilton::support::log_debug(logger, "Sending file over HTTP, URL: [" + url_str + "]," +
                 " file: [" + file_path_str + "], options: [" + opts_json.dumps() + "] ...");
-        wilton::client::client_request_config opts{std::move(opts_json)};
+        wilton::http::client_request_config opts{std::move(opts_json)};
         auto fd = sl::tinydir::file_source(file_path_str);
         // do not use chunked post, as length is known
         opts.options.send_request_body_content_length = true;

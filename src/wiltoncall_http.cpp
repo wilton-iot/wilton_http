@@ -36,10 +36,11 @@
 #include "wilton/support/registrar.hpp"
 
 namespace wilton {
-namespace client {
+namespace http {
 
 namespace { //anonymous
 
+// initialized from wilton_module_init
 std::shared_ptr<wilton_HttpClient> shared_client() {
     static std::shared_ptr<wilton_HttpClient> client =
             std::unique_ptr<wilton_HttpClient, std::function<void(wilton_HttpClient*)>>(
@@ -155,9 +156,9 @@ support::buffer httpclient_send_file(sl::io::span<const char> data) {
 
 extern "C" char* wilton_module_init() {
     try {
-        // client
-        wilton::support::register_wiltoncall("httpclient_send_request", wilton::client::httpclient_send_request);
-        wilton::support::register_wiltoncall("httpclient_send_file", wilton::client::httpclient_send_file);
+        wilton::http::shared_client();
+        wilton::support::register_wiltoncall("httpclient_send_request", wilton::http::httpclient_send_request);
+        wilton::support::register_wiltoncall("httpclient_send_file", wilton::http::httpclient_send_file);
         return nullptr;
     } catch (const std::exception& e) {
         return wilton::support::alloc_copy(TRACEMSG(e.what() + "\nException raised"));

@@ -33,7 +33,7 @@
 #include "wilton/support/exception.hpp"
 
 namespace wilton {
-namespace client {
+namespace http {
 
 class client_session_config {
 public:
