@@ -48,9 +48,12 @@ const std::string logger = std::string("wilton.httpClient");
 std::string resp_to_json(wilton::http::client_request_config& opts, sl::http::resource& resp) {
     auto data_hex = std::string();
     if (opts.respone_data_file_path.empty()) {
-        auto sink = sl::io::string_sink();
-        sl::io::copy_to_hex(resp, sink);
-        data_hex = sink.get_string();
+        auto dest = sl::io::string_sink();
+        {
+            auto sink = sl::io::make_hex_sink(dest);
+            sl::io::copy_all(resp, sink);
+        }
+        data_hex = dest.get_string();
     } else {
         auto sink = sl::tinydir::file_sink(opts.respone_data_file_path);
         sl::io::copy_all(resp, sink);
@@ -58,9 +61,12 @@ std::string resp_to_json(wilton::http::client_request_config& opts, sl::http::re
             {"responseDataFilePath", opts.respone_data_file_path}
         });
         auto dsrc = sl::io::string_source(data_str);
-        auto sink_hex = sl::io::string_sink();
-        sl::io::copy_to_hex(dsrc, sink_hex);
-        data_hex = sink_hex.get_string();
+        auto dest_hex = sl::io::string_sink();
+        {
+            auto sink_hex = sl::io::make_hex_sink(dest_hex);
+            sl::io::copy_all(dsrc, sink_hex);
+        }
+        data_hex = dest_hex.get_string();
     }
     auto resp_json = wilton::http::client_response::to_json(std::move(data_hex), resp, resp.get_info());
     return resp_json.dumps();
