@@ -66,12 +66,16 @@ staticlib::http::resource wilton::http::part_sender::send_file(){
             sl::io::array_source arr_source{tmp_span};
 
             options.request_body_content_length = static_cast<uint32_t>(readed);
-            auto tmp_resp_resp = http->open_url(send_options.url, std::move(arr_source), options);
-            send_continue = !tmp_resp_resp.connection_successful();
-            if (chunk_number == last_chunk_number) {
-                resp_container.emplace_back(std::move(tmp_resp_resp));
+            try{
+                auto tmp_resp_resp = http->open_url(send_options.url, std::move(arr_source), options);
+                send_continue = !tmp_resp_resp.connection_successful();
+                if (chunk_number == last_chunk_number) {
+                    resp_container.emplace_back(std::move(tmp_resp_resp));
+                }
+            } catch (const std::exception& e) {
+                //supress error on send
+                send_continue = true;
             }
-
         } while (send_continue);
         ++chunk_number;
     }
