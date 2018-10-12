@@ -244,9 +244,8 @@ char* wilton_HttpClient_send_file_by_parts(
         int url_len,
         const char* file_path,
         int file_path_len,
-        const char* file_name,
-        int file_name_len,
-        int chunk_max_size,
+        const char* file_send_options_json,
+        int file_send_options_json_len,
         const char* request_metadata_json,
         int request_metadata_len,
         char** response_data_out,
@@ -257,6 +256,7 @@ char* wilton_HttpClient_send_file_by_parts(
                 int sent_successfully)) {
     if (nullptr == http) return wilton::support::alloc_copy(TRACEMSG("Null 'http' parameter specified"));
     if (nullptr == url) return wilton::support::alloc_copy(TRACEMSG("Null 'url' parameter specified"));
+    if (nullptr == file_send_options_json) return wilton::support::alloc_copy(TRACEMSG("Null 'sendOptions' parameter specified"));
     if (!sl::support::is_uint32_positive(url_len)) return wilton::support::alloc_copy(TRACEMSG(
             "Invalid 'url_len' parameter specified: [" + sl::support::to_string(url_len) + "]"));
     if (nullptr == file_path) return wilton::support::alloc_copy(TRACEMSG("Null 'file_path' parameter specified"));
@@ -264,34 +264,37 @@ char* wilton_HttpClient_send_file_by_parts(
             "Invalid 'file_path_len' parameter specified: [" + sl::support::to_string(file_path_len) + "]"));
     if (!sl::support::is_uint32(request_metadata_len)) return wilton::support::alloc_copy(TRACEMSG(
             "Invalid 'request_metadata_len' parameter specified: [" + sl::support::to_string(request_metadata_len) + "]"));
+    if (!sl::support::is_uint32(file_send_options_json_len)) return wilton::support::alloc_copy(TRACEMSG(
+            "Invalid 'file_send_options_json_len' parameter specified: [" + sl::support::to_string(file_send_options_json_len) + "]"));
     try {
         auto url_str = std::string(url, static_cast<uint32_t> (url_len));
         auto file_path_str = std::string(file_path, static_cast<uint32_t> (file_path_len));
-        auto file_name_str = std::string(file_name, static_cast<uint32_t> (file_name_len));
         auto opts_json = sl::json::value();
         if (request_metadata_len > 0) {
             std::string meta_str{request_metadata_json, static_cast<uint32_t> (request_metadata_len)};
             opts_json = sl::json::loads(meta_str);
         }
-        wilton::support::log_debug(logger, "Sending file over HTTP, URL: [" + url_str + "]," +
-                " file: [" + file_path_str + "], options: [" + opts_json.dumps() + "] ...");
+        auto file_send_opts_json = sl::json::value();
+        if (file_send_options_json_len > 0) {
+            std::string file_send_opts_str{file_send_options_json, static_cast<uint32_t> (file_send_options_json_len)};
+            file_send_opts_json = sl::json::loads(file_send_opts_str);
+        }
         wilton::http::client_request_config opts{std::move(opts_json)};
-        auto fd = sl::tinydir::file_source(file_path_str);
-        // do not use chunked post, as length is known
-        wilton::http::part_send_options sender_options;
-        sender_options.chunk_max_size = static_cast<uint32_t>(chunk_max_size);
-        sender_options.file_name = file_name_str;
-        sender_options.loaded_file_path = file_path_str;
-        sender_options.url = url_str;
-        sender_options.file_size = static_cast<uint32_t>(fd.size());
-        opts.options.send_request_body_content_length = true;
-        opts.options.request_body_content_length = sender_options.chunk_max_size;
-        wilton::http::part_sender sender(&http->impl(), opts.options, sender_options);
-        sender.preapre_file();
-        sl::http::resource resp = sender.send_file();
+        wilton::http::part_sender_config send_opts{std::move(file_send_opts_json)};
+        wilton::support::log_debug(logger, "Sending file over HTTP, URL: [" + url_str + "]," +
+                " file: [" + file_path_str + "], metadata: [" + opts_json.dumps() +
+                "], send options" + file_send_opts_json.dumps() + "] ...");
+
+        // setup repeated parameters if they not setted
+        if (send_opts.options.loaded_file_path.empty()) send_opts.options.loaded_file_path = file_path_str;
+        if (send_opts.options.url.empty()) send_opts.options.url = url_str;
+
+        wilton::http::part_sender sender(&http->impl(), opts.options, send_opts.options);
+        bool timer_expired = false;
+        std::string resp_complete = sender.send_file(timer_expired);
         wilton::support::log_debug(logger,
-                "HTTP file send complete, status code: [" + sl::support::to_string(resp.get_status_code()) + "]");
-        std::string resp_complete = resp_to_json(opts, resp);
+                "HTTP file send complete, timer status: [" +
+                timer_expired?std::string{"timer expired"}:std::string{"timer NOT expired"} + "]");
         if (nullptr != finalizer_cb) {
             finalizer_cb(finalizer_ctx, 1);
         }

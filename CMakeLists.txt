@@ -37,6 +37,7 @@ set ( ${PROJECT_NAME}_DEPS
         staticlib_http
         staticlib_tinydir
         staticlib_pimpl
+        staticlib_crypto
         libcurl )
 staticlib_pkg_check_modules ( ${PROJECT_NAME}_DEPS_PC REQUIRED ${PROJECT_NAME}_DEPS )
 

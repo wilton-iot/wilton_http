@@ -156,9 +156,8 @@ support::buffer httpclient_send_file_by_parts(sl::io::span<const char> data) {
     auto json = sl::json::load(data);
     auto rurl = std::ref(sl::utils::empty_string());
     auto rfile = std::ref(sl::utils::empty_string());
-    auto rname = std::ref(sl::utils::empty_string());
-    size_t max_chunk_size = 102400; // 100 kb
     std::string metadata = sl::utils::empty_string();
+    std::string send_options = sl::utils::empty_string();
     auto rem = false;
     for (const sl::json::field& fi : json.as_object()) {
         auto& name = fi.name();
@@ -166,10 +165,8 @@ support::buffer httpclient_send_file_by_parts(sl::io::span<const char> data) {
             rurl = fi.as_string_nonempty_or_throw(name);
         } else if ("filePath" == name) {
             rfile = fi.as_string_nonempty_or_throw(name);
-        } else if ("fileName" == name) {
-            rname = fi.as_string_nonempty_or_throw(name);
-        } else if ("maxChunkSize" == name) {
-            max_chunk_size = fi.as_int64_or_throw(name);
+        } else if ("sendOptions" == name) {
+            send_options = fi.val().dumps();
         } else if ("metadata" == name) {
             metadata = fi.val().dumps();
         } else if ("remove" == name) {
@@ -182,11 +179,10 @@ support::buffer httpclient_send_file_by_parts(sl::io::span<const char> data) {
             "Required parameter 'url' not specified"));
     if (rfile.get().empty()) throw support::exception(TRACEMSG(
             "Required parameter 'filePath' not specified"));
-    if (rname.get().empty()) throw support::exception(TRACEMSG(
-            "Required parameter 'fileName' not specified"));
+    if (send_options.empty()) throw support::exception(TRACEMSG(
+            "Required parameter 'sendOptions' not specified"));
     const std::string& url = rurl.get();
     const std::string& file_path = rfile.get();
-    const std::string& file_name = rname.get();
     // call wilton
     auto cl = shared_client();
     char* out = nullptr;
@@ -194,8 +190,7 @@ support::buffer httpclient_send_file_by_parts(sl::io::span<const char> data) {
     std::string* pass_ctx = rem ? new std::string(file_path.data(), file_path.length()) : new std::string();
     char* err = wilton_HttpClient_send_file_by_parts(cl.get(), url.c_str(), static_cast<int>(url.length()),
             file_path.c_str(), static_cast<int>(file_path.length()),
-            file_name.c_str(), static_cast<int>(file_name.length()),
-            max_chunk_size,
+            send_options.c_str(), static_cast<int>(send_options.length()),
             metadata.c_str(), static_cast<int>(metadata.length()),
             std::addressof(out), std::addressof(out_len),
             pass_ctx,
