@@ -1,6 +1,3 @@
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/stat.h>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -77,37 +74,24 @@ wilton::http::part_sender::part_sender(staticlib::http::session *http, staticlib
     : http(http), options(options), send_options(send_options) {}
 
 size_t wilton::http::part_sender::preapre_file(){
-    // разделяем файл на части, для этого сначала определим сколько их будет.
-    int source = ::open(send_options.loaded_file_path.c_str(), O_RDONLY, 0);
-    if (-1 == source) throw support::exception(TRACEMSG("Error opening src file: [" + send_options.loaded_file_path + "]," +
-                                                        " error: [" + ::strerror(errno) + "]"));
-    auto deferred_src = sl::support::defer([source]() STATICLIB_NOEXCEPT {
-                                               ::close(source);
-                                           });
-    struct stat stat_source;
-    auto err_stat = ::fstat(source, std::addressof(stat_source));
-    if (-1 == err_stat) throw support::exception(TRACEMSG("Error obtaining file status: [" + send_options.loaded_file_path + "]," +
-                                                          " error: [" + ::strerror(errno) + "]"));
-
     std::vector<char> buf(send_options.chunk_max_size);
     auto sink = sl::io::string_sink();
 
     // get hash
     auto tpath = sl::tinydir::path(send_options.loaded_file_path);
     auto src = tpath.open_read();
-    auto sha_source = sl::crypto::make_sha256_source<sl::tinydir::file_source>(std::move(src));
+    send_options.file_size = src.size(); // get size before move source
 
+    auto sha_source = sl::crypto::make_sha256_source<sl::tinydir::file_source>(std::move(src));
     sl::io::copy_all(sha_source, sink, buf);
     auto hash = sha_source.get_hash();
     options.headers.push_back(header_option(opt_file_hash256, hash));
 
-    send_options.file_size = stat_source.st_size;
     send_options.chunks_count = send_options.file_size/send_options.chunk_max_size +
             !!(send_options.file_size%send_options.chunk_max_size);
     return send_options.chunks_count;
 }
 
-//staticlib::http::resource wilton::http::part_sender::send_file(){
 std::string wilton::http::part_sender::send_file(bool& is_timer_expired){
     preapre_file();
     // setup send options
