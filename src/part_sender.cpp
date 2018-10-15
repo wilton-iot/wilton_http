@@ -136,30 +136,24 @@ std::string wilton::http::part_sender::send_file(bool& is_timer_expired){
             auto offset = chunk_number*send_options.chunk_max_size;
             source_in.seek(offset*sizeof(char));
 
-            std::vector<char> buf(send_options.chunk_max_size);
-            sl::io::span<char> tmp_span(buf.data(), send_options.chunk_max_size);
-            auto readed = source_in.read(tmp_span);
-            sl::io::array_source arr_source{tmp_span.data(),static_cast<uint32_t>(readed)};
-
             auto expected_readed = source_in.size() - offset;
             if (expected_readed > send_options.chunk_max_size) {
                 expected_readed = send_options.chunk_max_size;
             }
-            options.request_body_content_length = static_cast<uint32_t>(readed);
+            options.request_body_content_length = static_cast<uint32_t>(expected_readed);
 
-            // setup chunk hash
-            std::vector<char> tmp_buf(send_options.chunk_max_size);
-            auto sink = sl::io::string_sink();
-            sl::io::array_source hash_arr_source{tmp_span.data(),static_cast<uint32_t>(readed)};
-            auto sha_source = sl::crypto::make_sha256_source<sl::io::array_source>(std::move(hash_arr_source));
-            sl::io::copy_all(sha_source, sink, tmp_buf);
-            auto hash = sha_source.get_hash();
-            options.headers.push_back(header_option(opt_chunk_hash256, hash));
+            auto limited = sl::io::make_limited_source (source_in, expected_readed);
 
             try{
-                auto tmp_resp_resp = http->open_url(send_options.url, std::move(arr_source), options);
+                auto tmp_resp_resp = http->open_url(send_options.url, std::move(limited), options);
                 send_continue = !tmp_resp_resp.connection_successful();
                 auto data_hex = std::string{};
+                auto dest = sl::io::string_sink();
+                {
+                    auto sink = sl::io::make_hex_sink(dest);
+                    sl::io::copy_all(tmp_resp_resp, sink);
+                }
+                data_hex = dest.get_string();
                 auto resp_json = wilton::http::client_response::to_json(std::move(data_hex), tmp_resp_resp, tmp_resp_resp.get_info());
                 chunk_send_results.push_back(std::move(resp_json));
             } catch (const std::exception& e) {
