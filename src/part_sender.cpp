@@ -105,9 +105,9 @@ size_t wilton::http::part_sender::preapre_file(){
     int out_hash_len = 0;
     const int buffer_len = 2048;
     char* err = wilton_crypto_get_file_hash256(send_options.loaded_file_path.c_str(),
-                                            send_options.loaded_file_path.size(),
-                                            buffer_len,
-                                            std::addressof(out_hash), std::addressof(out_hash_len));
+            static_cast<size_t>(send_options.loaded_file_path.size()),
+            buffer_len,
+            std::addressof(out_hash), std::addressof(out_hash_len));
     if (nullptr != err) support::throw_wilton_error(err, TRACEMSG(err));
 
     options.headers.push_back(header_option(opt_file_hash256, std::string{out_hash, static_cast<size_t>(out_hash_len)}));
@@ -163,7 +163,8 @@ std::string wilton::http::part_sender::send_file(bool& is_timer_expired){
                     sl::io::copy_all(tmp_resp_resp, sink);
                 }
                 data_hex = dest.get_string();
-                auto resp_json = wilton::http::client_response::to_json(std::move(data_hex), tmp_resp_resp, tmp_resp_resp.get_info());
+                auto resp_json = wilton::http::client_response::to_json(std::move(data_hex),
+                        tmp_resp_resp, tmp_resp_resp.get_info());
                 chunk_send_results.push_back(std::move(resp_json));
             } catch (const std::exception& e) {
                 //supress error on send
