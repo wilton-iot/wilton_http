@@ -37,7 +37,6 @@ set ( ${PROJECT_NAME}_DEPS
         staticlib_http
         staticlib_tinydir
         staticlib_pimpl
-        staticlib_crypto
         libcurl )
 staticlib_pkg_check_modules ( ${PROJECT_NAME}_DEPS_PC REQUIRED ${PROJECT_NAME}_DEPS )
 
@@ -83,6 +82,7 @@ target_include_directories ( ${PROJECT_NAME} BEFORE PRIVATE
         ${WILTON_DIR}/core/include
         ${WILTON_DIR}/modules/wilton_loader/include
         ${WILTON_DIR}/modules/wilton_logging/include
+        ${WILTON_DIR}/modules/wilton_crypto/include
         ${${PROJECT_NAME}_DEPS_PC_INCLUDE_DIRS} )
 
 target_compile_options ( ${PROJECT_NAME} PRIVATE ${${PROJECT_NAME}_DEPS_PC_CFLAGS_OTHER} )

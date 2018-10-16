@@ -1,3 +1,20 @@
+/*
+ * Copyright 2018, alex at staticlibs.net
+ * Copyright 2018, mike at myasnikov.mike@gmail.com
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -10,10 +27,11 @@
 #include "staticlib/io/array_source.hpp"
 #include "staticlib/io/limited_source.hpp"
 #include "staticlib/support.hpp"
-#include "staticlib/crypto.hpp"
+
 #include "wilton/support/exception.hpp"
 #include "wilton/support/buffer.hpp"
 #include "wilton/wilton_http.h"
+#include "wilton/wilton_crypto.h"
 #include "client_response.hpp"
 
 #include "part_sender.hpp"
@@ -74,18 +92,25 @@ wilton::http::part_sender::part_sender(staticlib::http::session *http, staticlib
     : http(http), options(options), send_options(send_options) {}
 
 size_t wilton::http::part_sender::preapre_file(){
-    std::vector<char> buf(send_options.chunk_max_size);
-    auto sink = sl::io::string_sink();
+//    std::vector<char> buf(send_options.chunk_max_size);
+//    auto sink = sl::io::string_sink();
 
-    // get hash
+    // get size
     auto tpath = sl::tinydir::path(send_options.loaded_file_path);
     auto src = tpath.open_read();
     send_options.file_size = src.size(); // get size before move source
 
-    auto sha_source = sl::crypto::make_sha256_source<sl::tinydir::file_source>(std::move(src));
-    sl::io::copy_all(sha_source, sink, buf);
-    auto hash = sha_source.get_hash();
-    options.headers.push_back(header_option(opt_file_hash256, hash));
+    //get hash
+    char* out_hash = nullptr;
+    int out_hash_len = 0;
+    const int buffer_len = 2048;
+    char* err = wilton_crypto_get_file_hash256(send_options.loaded_file_path.c_str(),
+                                            send_options.loaded_file_path.size(),
+                                            buffer_len,
+                                            std::addressof(out_hash), std::addressof(out_hash_len));
+    if (nullptr != err) support::throw_wilton_error(err, TRACEMSG(err));
+
+    options.headers.push_back(header_option(opt_file_hash256, std::string{out_hash, static_cast<size_t>(out_hash_len)}));
 
     send_options.chunks_count = send_options.file_size/send_options.chunk_max_size +
             !!(send_options.file_size%send_options.chunk_max_size);
