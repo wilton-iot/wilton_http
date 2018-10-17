@@ -292,9 +292,13 @@ char* wilton_HttpClient_send_file_by_parts(
         wilton::http::part_sender sender(&http->impl(), opts.options, send_opts.options);
         bool timer_expired = false;
         std::string resp_complete = sender.send_file(timer_expired);
-        wilton::support::log_debug(logger,
-                "HTTP file send complete, timer status: [" +
-                timer_expired?std::string{"timer expired"}:std::string{"timer NOT expired"} + "]");
+        if (timer_expired) {
+            wilton::support::log_debug(logger,
+                "HTTP file send NOT complete, timer status: timer expired");
+        } else {
+            wilton::support::log_debug(logger,
+                "HTTP file send complete, timer status: timer NOT expired");
+        }
         if (nullptr != finalizer_cb) {
             finalizer_cb(finalizer_ctx, 1);
         }
