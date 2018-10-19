@@ -104,7 +104,7 @@ size_t wilton::http::part_sender::preapre_file(){
     char* out_hash = nullptr;
     int out_hash_len = 0;
     const int buffer_len = 2048;
-    char* err = wilton_crypto_get_file_hash256(send_options.loaded_file_path.c_str(),
+    char* err = wilton_crypto_sha256(send_options.loaded_file_path.c_str(),
             static_cast<int>(send_options.loaded_file_path.size()),
             buffer_len,
             std::addressof(out_hash), std::addressof(out_hash_len));
