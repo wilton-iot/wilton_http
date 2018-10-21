@@ -141,7 +141,7 @@ std::string wilton::http::part_sender::send_file(bool& is_timer_expired){
             auto tpath = sl::tinydir::path(send_options.loaded_file_path);
             auto source_in = tpath.open_read();
             auto offset = chunk_number*send_options.chunk_max_size;
-            source_in.seek(offset*sizeof(char));
+            source_in.seek(offset);
 
             auto expected_readed = source_in.size() - offset;
             if (expected_readed > send_options.chunk_max_size) {
