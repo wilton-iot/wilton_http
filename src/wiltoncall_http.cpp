@@ -151,6 +151,60 @@ support::buffer httpclient_send_file(sl::io::span<const char> data) {
     return support::wrap_wilton_buffer(out, out_len);
 }
 
+support::buffer httpclient_send_file_by_parts(sl::io::span<const char> data) {
+    // json parse
+    auto json = sl::json::load(data);
+    auto rurl = std::ref(sl::utils::empty_string());
+    auto rfile = std::ref(sl::utils::empty_string());
+    std::string metadata = sl::utils::empty_string();
+    std::string send_options = sl::utils::empty_string();
+    auto rem = false;
+    for (const sl::json::field& fi : json.as_object()) {
+        auto& name = fi.name();
+        if ("url" == name) {
+            rurl = fi.as_string_nonempty_or_throw(name);
+        } else if ("filePath" == name) {
+            rfile = fi.as_string_nonempty_or_throw(name);
+        } else if ("sendOptions" == name) {
+            send_options = fi.val().dumps();
+        } else if ("metadata" == name) {
+            metadata = fi.val().dumps();
+        } else if ("remove" == name) {
+            rem = fi.as_bool_or_throw(name);
+        } else {
+            throw support::exception(TRACEMSG("Unknown data field: [" + name + "]"));
+        }
+    }
+    if (rurl.get().empty()) throw support::exception(TRACEMSG(
+            "Required parameter 'url' not specified"));
+    if (rfile.get().empty()) throw support::exception(TRACEMSG(
+            "Required parameter 'filePath' not specified"));
+    if (send_options.empty()) throw support::exception(TRACEMSG(
+            "Required parameter 'sendOptions' not specified"));
+    const std::string& url = rurl.get();
+    const std::string& file_path = rfile.get();
+    // call wilton
+    auto cl = shared_client();
+    char* out = nullptr;
+    int out_len = 0;
+    std::string* pass_ctx = rem ? new std::string(file_path.data(), file_path.length()) : new std::string();
+    char* err = wilton_HttpClient_send_file_by_parts(cl.get(), url.c_str(), static_cast<int>(url.length()),
+            file_path.c_str(), static_cast<int>(file_path.length()),
+            send_options.c_str(), static_cast<int>(send_options.length()),
+            metadata.c_str(), static_cast<int>(metadata.length()),
+            std::addressof(out), std::addressof(out_len),
+            pass_ctx,
+            [](void* ctx, int) {
+                std::string* filePath_passed = static_cast<std::string*> (ctx);
+                if (!filePath_passed->empty()) {
+                    std::remove(filePath_passed->c_str());
+                }
+                delete filePath_passed;
+            });
+    if (nullptr != err) support::throw_wilton_error(err, TRACEMSG(err));
+    return support::wrap_wilton_buffer(out, out_len);
+}
+
 } // namespace
 }
 
@@ -159,6 +213,7 @@ extern "C" char* wilton_module_init() {
         wilton::http::shared_client();
         wilton::support::register_wiltoncall("httpclient_send_request", wilton::http::httpclient_send_request);
         wilton::support::register_wiltoncall("httpclient_send_file", wilton::http::httpclient_send_file);
+        wilton::support::register_wiltoncall("httpclient_send_file_by_parts", wilton::http::httpclient_send_file_by_parts);
         return nullptr;
     } catch (const std::exception& e) {
         return wilton::support::alloc_copy(TRACEMSG(e.what() + "\nException raised"));

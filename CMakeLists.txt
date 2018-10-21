@@ -54,6 +54,7 @@ if ( STATICLIB_TOOLCHAIN MATCHES "windows_.+" )
 endif ( )
 
 add_library ( ${PROJECT_NAME} SHARED
+        ${CMAKE_CURRENT_LIST_DIR}/src/part_sender.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/wilton_http.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/wiltoncall_http.cpp
         ${${PROJECT_NAME}_RESFILE}
@@ -81,6 +82,7 @@ target_include_directories ( ${PROJECT_NAME} BEFORE PRIVATE
         ${WILTON_DIR}/core/include
         ${WILTON_DIR}/modules/wilton_loader/include
         ${WILTON_DIR}/modules/wilton_logging/include
+        ${WILTON_DIR}/modules/wilton_crypto/include
         ${${PROJECT_NAME}_DEPS_PC_INCLUDE_DIRS} )
 
 target_compile_options ( ${PROJECT_NAME} PRIVATE ${${PROJECT_NAME}_DEPS_PC_CFLAGS_OTHER} )

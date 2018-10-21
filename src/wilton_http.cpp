@@ -40,6 +40,7 @@
 #include "client_response.hpp"
 #include "client_request_config.hpp"
 #include "client_session_config.hpp"
+#include "part_sender.hpp"
 
 namespace { // anonymous
 
@@ -236,3 +237,79 @@ char* wilton_HttpClient_send_file(
         return wilton::support::alloc_copy(TRACEMSG(e.what() + "\nException raised"));
     }   
 }
+
+char* wilton_HttpClient_send_file_by_parts(
+        wilton_HttpClient* http,
+        const char* url,
+        int url_len,
+        const char* file_path,
+        int file_path_len,
+        const char* file_send_options_json,
+        int file_send_options_json_len,
+        const char* request_metadata_json,
+        int request_metadata_len,
+        char** response_data_out,
+        int* response_data_len_out,
+        void* finalizer_ctx,
+        void (*finalizer_cb)(
+                void* finalizer_ctx,
+                int sent_successfully)) {
+    if (nullptr == http) return wilton::support::alloc_copy(TRACEMSG("Null 'http' parameter specified"));
+    if (nullptr == url) return wilton::support::alloc_copy(TRACEMSG("Null 'url' parameter specified"));
+    if (nullptr == file_send_options_json) return wilton::support::alloc_copy(TRACEMSG("Null 'sendOptions' parameter specified"));
+    if (!sl::support::is_uint32_positive(url_len)) return wilton::support::alloc_copy(TRACEMSG(
+            "Invalid 'url_len' parameter specified: [" + sl::support::to_string(url_len) + "]"));
+    if (nullptr == file_path) return wilton::support::alloc_copy(TRACEMSG("Null 'file_path' parameter specified"));
+    if (!sl::support::is_uint16_positive(file_path_len)) return wilton::support::alloc_copy(TRACEMSG(
+            "Invalid 'file_path_len' parameter specified: [" + sl::support::to_string(file_path_len) + "]"));
+    if (!sl::support::is_uint32(request_metadata_len)) return wilton::support::alloc_copy(TRACEMSG(
+            "Invalid 'request_metadata_len' parameter specified: [" + sl::support::to_string(request_metadata_len) + "]"));
+    if (!sl::support::is_uint32(file_send_options_json_len)) return wilton::support::alloc_copy(TRACEMSG(
+            "Invalid 'file_send_options_json_len' parameter specified: [" + sl::support::to_string(file_send_options_json_len) + "]"));
+    try {
+        auto url_str = std::string(url, static_cast<uint32_t> (url_len));
+        auto file_path_str = std::string(file_path, static_cast<uint32_t> (file_path_len));
+        auto opts_json = sl::json::value();
+        if (request_metadata_len > 0) {
+            std::string meta_str{request_metadata_json, static_cast<uint32_t> (request_metadata_len)};
+            opts_json = sl::json::loads(meta_str);
+        }
+        auto file_send_opts_json = sl::json::value();
+        if (file_send_options_json_len > 0) {
+            std::string file_send_opts_str{file_send_options_json, static_cast<uint32_t> (file_send_options_json_len)};
+            file_send_opts_json = sl::json::loads(file_send_opts_str);
+        }
+        wilton::http::client_request_config opts{std::move(opts_json)};
+        wilton::http::part_sender_config send_opts{std::move(file_send_opts_json)};
+        wilton::support::log_debug(logger, "Sending file over HTTP, URL: [" + url_str + "]," +
+                " file: [" + file_path_str + "], metadata: [" + opts_json.dumps() +
+                "], send options" + file_send_opts_json.dumps() + "] ...");
+
+        // setup repeated parameters if they not setted
+        if (send_opts.options.loaded_file_path.empty()) send_opts.options.loaded_file_path = file_path_str;
+        if (send_opts.options.url.empty()) send_opts.options.url = url_str;
+
+        wilton::http::part_sender sender(&http->impl(), opts.options, send_opts.options);
+        bool timer_expired = false;
+        std::string resp_complete = sender.send_file(timer_expired);
+        if (timer_expired) {
+            wilton::support::log_debug(logger,
+                "HTTP file send NOT complete, timer status: timer expired");
+        } else {
+            wilton::support::log_debug(logger,
+                "HTTP file send complete, timer status: timer NOT expired");
+        }
+        if (nullptr != finalizer_cb) {
+            finalizer_cb(finalizer_ctx, 1);
+        }
+        *response_data_out = wilton::support::alloc_copy(resp_complete);
+        *response_data_len_out = static_cast<int>(resp_complete.length());
+        return nullptr;
+    } catch (const std::exception& e) {
+        if (nullptr != finalizer_cb) {
+            finalizer_cb(finalizer_ctx, 0);
+        }
+        return wilton::support::alloc_copy(TRACEMSG(e.what() + "\nException raised"));
+    }
+}
+

@@ -221,6 +221,22 @@ char* wilton_HttpClient_send_file(
                 void* finalizer_ctx,
                 int sent_successfully));
 
+char* wilton_HttpClient_send_file_by_parts(wilton_HttpClient* http,
+        const char* url,
+        int url_len,
+        const char* file_path,
+        int file_path_len,
+        const char* file_send_options_json,
+        int file_send_options_json_len,
+        const char* request_metadata_json,
+        int request_metadata_len,
+        char** response_data_out,
+        int* response_data_len_out,
+        void* finalizer_ctx,
+        void (*finalizer_cb)(
+                void* finalizer_ctx,
+                int sent_successfully));
+
 #ifdef __cplusplus
 }
 #endif
