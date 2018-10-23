@@ -77,7 +77,7 @@ std::string wilton::http::part_sender::send_file(bool& is_timer_expired){
     options.headers.push_back(header_option(opt_chunk_number, sl::support::to_string(chunk_number)));
 
     std::vector<sl::json::field> array_value;
-    size_t current_time = 0;
+    size_t stop_time = sl::utils::current_time_millis_steady() + send_options.timeout_ms;
     while(chunk_number < send_options.chunks_count){
         bool send_continue = true;
         options.headers.back() = (header_option(opt_chunk_number, sl::support::to_string(chunk_number)));
@@ -105,10 +105,8 @@ std::string wilton::http::part_sender::send_file(bool& is_timer_expired){
                     sl::io::copy_all(tmp_resp_resp, sink);
                 }
                 data_hex = dest.get_string();
-                auto info = tmp_resp_resp.get_info();
-                current_time += static_cast<uint32_t> (info.total_time_secs*1000);
                 auto resp_json = wilton::http::client_response::to_json(std::move(data_hex),
-                        tmp_resp_resp, info);
+                        tmp_resp_resp, tmp_resp_resp.get_info());
                 chunk_send_results.push_back(std::move(resp_json));
             } catch (const std::exception& e) {
                 //supress error on send
@@ -117,7 +115,7 @@ std::string wilton::http::part_sender::send_file(bool& is_timer_expired){
                 chunk_send_results.push_back(std::move(tmp_val));
                 send_continue = true;
             }
-            if (current_time >= send_options.timeout_ms) {
+            if (sl::utils::current_time_millis_steady() >= stop_time) {
                 break;
             }
         } while (send_continue);
@@ -125,7 +123,8 @@ std::string wilton::http::part_sender::send_file(bool& is_timer_expired){
         sl::json::field chunk_field(sl::support::to_string(chunk_number), std::move(chunk_result));
         array_value.push_back(std::move(chunk_field));
         ++chunk_number;
-        if (current_time >= send_options.timeout_ms && ( send_continue || chunk_number != send_options.chunks_count)) {
+        if (sl::utils::current_time_millis_steady() >= stop_time &&
+            ( send_continue || chunk_number != send_options.chunks_count)) {
             sl::json::field expired_field("timer_expired", true);
             array_value.push_back(std::move(expired_field));
             is_timer_expired = true;
