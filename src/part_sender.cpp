@@ -77,7 +77,7 @@ std::string wilton::http::part_sender::send_file(bool& is_timer_expired){
     options.headers.push_back(header_option(opt_chunk_number, sl::support::to_string(chunk_number)));
 
     std::vector<sl::json::field> array_value;
-    size_t stop_time = sl::utils::current_time_millis_steady() + send_options.timeout_ms;
+    uint64_t stop_time = sl::utils::current_time_millis_steady() + send_options.timeout_ms;
     while(chunk_number < send_options.chunks_count){
         bool send_continue = true;
         options.headers.back() = (header_option(opt_chunk_number, sl::support::to_string(chunk_number)));
