@@ -59,6 +59,9 @@ size_t wilton::http::part_sender::preapre_file(){
             static_cast<int>(send_options.loaded_file_path.size()),
             std::addressof(out_hash), std::addressof(out_hash_len));
     if (nullptr != err) support::throw_wilton_error(err, TRACEMSG(err));
+    auto deferred = sl::support::defer([out_hash] () STATICLIB_NOEXCEPT {
+        wilton_free(out_hash);
+    });
 
     options.headers.push_back(header_option(opt_file_hash256, std::string{out_hash, static_cast<size_t>(out_hash_len)}));
 
