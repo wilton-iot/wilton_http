@@ -18,5 +18,6 @@ EXPORTS
     wilton_HttpClient_close
     wilton_HttpClient_execute
     wilton_HttpClient_send_file
+    wilton_HttpClient_send_file_by_parts
 
     wilton_module_init

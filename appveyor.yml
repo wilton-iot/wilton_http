@@ -25,6 +25,8 @@ install:
   - cmd /c resources\ci\appveyor-checkout.bat
 
 build_script:
+  - echo "Updading modules to master"
+  - resources\ci\master-modules.bat
   - echo "Replacing repo to test PR"
   - rd /s /q modules\wilton_http
   - if exist modules\wilton_http exit /b 1
