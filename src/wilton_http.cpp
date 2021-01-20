@@ -35,6 +35,7 @@
 #include "staticlib/tinydir.hpp"
 
 #include "wilton/support/alloc.hpp"
+#include "wilton/support/buffer.hpp"
 #include "wilton/support/logging.hpp"
 
 #include "client_response.hpp"
@@ -46,7 +47,7 @@ namespace { // anonymous
 
 const std::string logger = std::string("wilton.httpClient");
 
-std::string resp_to_json(wilton::http::client_request_config& opts, sl::http::resource& resp) {
+sl::json::value resp_to_json(wilton::http::client_request_config& opts, sl::http::resource& resp) {
     auto data_hex = std::string();
     if (opts.respone_data_file_path.empty()) {
         auto dest = sl::io::string_sink();
@@ -69,8 +70,7 @@ std::string resp_to_json(wilton::http::client_request_config& opts, sl::http::re
         }
         data_hex = dest_hex.get_string();
     }
-    auto resp_json = wilton::http::client_response::to_json(std::move(data_hex), resp, resp.get_info());
-    return resp_json.dumps();
+    return wilton::http::client_response::to_json(std::move(data_hex), resp, resp.get_info());
 }
 
 } // namespace
@@ -91,10 +91,21 @@ public:
     }
 };
 
-char* wilton_HttpClient_create(
-        wilton_HttpClient** http_out,
-        const char* conf_json,
-        int conf_json_len) {
+struct wilton_HttpQueue {
+private:
+    std::unique_ptr<sl::http::polling_session> delegate;
+
+public:
+    wilton_HttpQueue(sl::http::polling_session&& delegate) :
+    delegate(new sl::http::polling_session(std::move(delegate))) { }
+
+    sl::http::polling_session& impl() {
+        return *delegate;
+    }
+};
+
+char* wilton_HttpClient_create(wilton_HttpClient** http_out,
+        const char* conf_json, int conf_json_len) /* noexcept */ {
     if (nullptr == http_out) return wilton::support::alloc_copy(TRACEMSG("Null 'http_out' parameter specified"));
     if (nullptr == conf_json) return wilton::support::alloc_copy(TRACEMSG("Null 'conf_json' parameter specified"));
     if (!sl::support::is_uint32_positive(conf_json_len)) return wilton::support::alloc_copy(TRACEMSG(
@@ -117,8 +128,7 @@ char* wilton_HttpClient_create(
     }
 }
 
-char* wilton_HttpClient_close(
-        wilton_HttpClient* http) {
+char* wilton_HttpClient_close(wilton_HttpClient* http) /* noexcept */ {
     if (nullptr == http) return wilton::support::alloc_copy(TRACEMSG("Null 'http' parameter specified"));
     try {
         delete http;
@@ -130,17 +140,11 @@ char* wilton_HttpClient_close(
     }
 }
 
-char* wilton_HttpClient_execute(
-        wilton_HttpClient* http,
-        const char* url,
-        int url_len,
-        const char* request_data,
-        int request_data_len,
-        const char* request_metadata_json,
-        int request_metadata_len,
-        char** response_data_out,
-        int* response_data_len_out) {
-    if (nullptr == http) return wilton::support::alloc_copy(TRACEMSG("Null 'http' parameter specified"));    
+char* wilton_HttpClient_execute(wilton_HttpClient* http, const char* url, int url_len,
+        const char* request_data,int request_data_len,
+        const char* request_metadata_json, int request_metadata_len,
+        char** response_data_out, int* response_data_len_out) /* noexcept */ {
+    if (nullptr == http) return wilton::support::alloc_copy(TRACEMSG("Null 'http' parameter specified"));
     if (nullptr == url) return wilton::support::alloc_copy(TRACEMSG("Null 'url' parameter specified"));
     if (!sl::support::is_uint32_positive(url_len)) return wilton::support::alloc_copy(TRACEMSG(
             "Invalid 'url_len' parameter specified: [" + sl::support::to_string(url_len) + "]"));
@@ -148,6 +152,8 @@ char* wilton_HttpClient_execute(
             "Invalid 'request_data_len' parameter specified: [" + sl::support::to_string(request_data_len) + "]"));
     if (!sl::support::is_uint32(request_metadata_len)) return wilton::support::alloc_copy(TRACEMSG(
             "Invalid 'request_metadata_len' parameter specified: [" + sl::support::to_string(request_metadata_len) + "]"));
+    if (nullptr == response_data_out) return wilton::support::alloc_copy(TRACEMSG("Null 'response_data_out' parameter specified"));
+    if (nullptr == response_data_len_out) return wilton::support::alloc_copy(TRACEMSG("Null 'response_data_len_out' parameter specified"));
     try {
         auto url_str = std::string(url, static_cast<uint32_t> (url_len));
         auto opts_json = sl::json::value();
@@ -173,29 +179,24 @@ char* wilton_HttpClient_execute(
         }();
         wilton::support::log_debug(logger,
                 "HTTP request complete, status code: [" + sl::support::to_string(resp.get_status_code()) + "]");
-        std::string resp_complete = resp_to_json(opts, resp);
-        *response_data_out = wilton::support::alloc_copy(resp_complete);
-        *response_data_len_out = static_cast<int>(resp_complete.length());
+        auto resp_complete = resp_to_json(opts, resp);
+        auto span = wilton::support::make_json_buffer(resp_complete);
+        *response_data_out = span.data();
+        *response_data_len_out = span.size_int();
         return nullptr;
     } catch (const std::exception& e) {
         return wilton::support::alloc_copy(TRACEMSG(e.what() + "\nException raised"));
-    }    
+    }
 }
 
-char* wilton_HttpClient_send_file(
-        wilton_HttpClient* http,
-        const char* url,
-        int url_len,
-        const char* file_path,
-        int file_path_len,
-        const char* request_metadata_json,
-        int request_metadata_len,
-        char** response_data_out,
-        int* response_data_len_out,
+char* wilton_HttpClient_send_file(wilton_HttpClient* http, const char* url, int url_len,
+        const char* file_path,int file_path_len,
+        const char* request_metadata_json, int request_metadata_len,
+        char** response_data_out, int* response_data_len_out,
         void* finalizer_ctx,
         void (*finalizer_cb)(
                 void* finalizer_ctx,
-                int sent_successfully)) {
+                int sent_successfully)) /* noexcept */ {
     if (nullptr == http) return wilton::support::alloc_copy(TRACEMSG("Null 'http' parameter specified"));
     if (nullptr == url) return wilton::support::alloc_copy(TRACEMSG("Null 'url' parameter specified"));
     if (!sl::support::is_uint32_positive(url_len)) return wilton::support::alloc_copy(TRACEMSG(
@@ -205,6 +206,8 @@ char* wilton_HttpClient_send_file(
             "Invalid 'file_path_len' parameter specified: [" + sl::support::to_string(file_path_len) + "]"));
     if (!sl::support::is_uint32(request_metadata_len)) return wilton::support::alloc_copy(TRACEMSG(
             "Invalid 'request_metadata_len' parameter specified: [" + sl::support::to_string(request_metadata_len) + "]"));
+    if (nullptr == response_data_out) return wilton::support::alloc_copy(TRACEMSG("Null 'response_data_out' parameter specified"));
+    if (nullptr == response_data_len_out) return wilton::support::alloc_copy(TRACEMSG("Null 'response_data_len_out' parameter specified"));
     try {
         auto url_str = std::string(url, static_cast<uint32_t> (url_len));
         auto file_path_str = std::string(file_path, static_cast<uint32_t> (file_path_len));
@@ -223,12 +226,13 @@ char* wilton_HttpClient_send_file(
         sl::http::resource resp = http->impl().open_url(url_str, std::move(fd), opts.options);
         wilton::support::log_debug(logger,
                 "HTTP file send complete, status code: [" + sl::support::to_string(resp.get_status_code()) + "]");
-        std::string resp_complete = resp_to_json(opts, resp);
+        auto resp_complete = resp_to_json(opts, resp);
         if (nullptr != finalizer_cb) {
             finalizer_cb(finalizer_ctx, 1);
         }
-        *response_data_out = wilton::support::alloc_copy(resp_complete);
-        *response_data_len_out = static_cast<int>(resp_complete.length());
+        auto span = wilton::support::make_json_buffer(resp_complete);
+        *response_data_out = span.data();
+        *response_data_len_out = span.size_int();
         return nullptr;
     } catch (const std::exception& e) {
         if (nullptr != finalizer_cb) {
@@ -238,22 +242,15 @@ char* wilton_HttpClient_send_file(
     }   
 }
 
-char* wilton_HttpClient_send_file_by_parts(
-        wilton_HttpClient* http,
-        const char* url,
-        int url_len,
-        const char* file_path,
-        int file_path_len,
-        const char* file_send_options_json,
-        int file_send_options_json_len,
-        const char* request_metadata_json,
-        int request_metadata_len,
-        char** response_data_out,
-        int* response_data_len_out,
+char* wilton_HttpClient_send_file_by_parts(wilton_HttpClient* http, const char* url, int url_len,
+        const char* file_path, int file_path_len,
+        const char* file_send_options_json, int file_send_options_json_len,
+        const char* request_metadata_json, int request_metadata_len,
+        char** response_data_out, int* response_data_len_out,
         void* finalizer_ctx,
         void (*finalizer_cb)(
                 void* finalizer_ctx,
-                int sent_successfully)) {
+                int sent_successfully)) /* noexcept */ {
     if (nullptr == http) return wilton::support::alloc_copy(TRACEMSG("Null 'http' parameter specified"));
     if (nullptr == url) return wilton::support::alloc_copy(TRACEMSG("Null 'url' parameter specified"));
     if (nullptr == file_send_options_json) return wilton::support::alloc_copy(TRACEMSG("Null 'sendOptions' parameter specified"));
@@ -266,6 +263,8 @@ char* wilton_HttpClient_send_file_by_parts(
             "Invalid 'request_metadata_len' parameter specified: [" + sl::support::to_string(request_metadata_len) + "]"));
     if (!sl::support::is_uint32(file_send_options_json_len)) return wilton::support::alloc_copy(TRACEMSG(
             "Invalid 'file_send_options_json_len' parameter specified: [" + sl::support::to_string(file_send_options_json_len) + "]"));
+    if (nullptr == response_data_out) return wilton::support::alloc_copy(TRACEMSG("Null 'response_data_out' parameter specified"));
+    if (nullptr == response_data_len_out) return wilton::support::alloc_copy(TRACEMSG("Null 'response_data_len_out' parameter specified"));
     try {
         auto url_str = std::string(url, static_cast<uint32_t> (url_len));
         auto file_path_str = std::string(file_path, static_cast<uint32_t> (file_path_len));
@@ -313,3 +312,106 @@ char* wilton_HttpClient_send_file_by_parts(
     }
 }
 
+char* wilton_HttpQueue_create(wilton_HttpQueue** queue_out,
+        const char* conf_json, int conf_json_len) /* noexcept */ {
+    if (nullptr == queue_out) return wilton::support::alloc_copy(TRACEMSG("Null 'queue_out' parameter specified"));
+    if (nullptr == conf_json) return wilton::support::alloc_copy(TRACEMSG("Null 'conf_json' parameter specified"));
+    if (!sl::support::is_uint32_positive(conf_json_len)) return wilton::support::alloc_copy(TRACEMSG(
+            "Invalid 'conf_json_len' parameter specified: [" + sl::support::to_string(conf_json_len) + "]"));
+    try {
+        uint32_t conf_json_len_u32 = static_cast<uint32_t> (conf_json_len);
+        std::string json_str{conf_json, conf_json_len_u32};
+        sl::json::value json = sl::json::loads(json_str);
+        wilton::support::log_debug(logger, "Creating HTTP Queue, options: [" + json.dumps() + "] ...");
+        wilton::http::client_session_config conf{std::move(json)};
+        wilton_HttpQueue* queue_ptr = new wilton_HttpQueue(sl::http::polling_session(std::move(conf.options)));
+        wilton::support::log_debug(logger, "Queue created successfully");
+        *queue_out = queue_ptr;
+        return nullptr;
+    } catch (const std::exception& e) {
+        return wilton::support::alloc_copy(TRACEMSG(e.what() + "\nException raised"));
+    }
+}
+
+char* wilton_HttpQueue_close(wilton_HttpQueue* queue) /* noexcept */ {
+    if (nullptr == queue) return wilton::support::alloc_copy(TRACEMSG("Null 'queue' parameter specified"));
+    try {
+        delete queue;
+        std::string suppress_c4702;
+        (void) suppress_c4702;
+        return nullptr;
+    } catch (const std::exception& e) {
+        return wilton::support::alloc_copy(TRACEMSG(e.what() + "\nException raised"));
+    }
+}
+
+char* wilton_HttpQueue_submit(wilton_HttpQueue* queue, const char* url, int url_len,
+        const char* request_data, int request_data_len,
+        const char* request_metadata_json, int request_metadata_len) /* noexcept */ {
+    if (nullptr == queue) return wilton::support::alloc_copy(TRACEMSG("Null 'queue' parameter specified"));
+    if (nullptr == url) return wilton::support::alloc_copy(TRACEMSG("Null 'url' parameter specified"));
+    if (!sl::support::is_uint32_positive(url_len)) return wilton::support::alloc_copy(TRACEMSG(
+            "Invalid 'url_len' parameter specified: [" + sl::support::to_string(url_len) + "]"));
+    if (!sl::support::is_uint32(request_data_len)) return wilton::support::alloc_copy(TRACEMSG(
+            "Invalid 'request_data_len' parameter specified: [" + sl::support::to_string(request_data_len) + "]"));
+    if (!sl::support::is_uint32(request_metadata_len)) return wilton::support::alloc_copy(TRACEMSG(
+            "Invalid 'request_metadata_len' parameter specified: [" + sl::support::to_string(request_metadata_len) + "]"));
+    try {
+        auto url_str = std::string(url, static_cast<uint32_t> (url_len));
+        auto opts_json = sl::json::value();
+        if (request_metadata_len > 0) {
+            opts_json = sl::json::load({request_metadata_json, request_metadata_len});
+        }
+        wilton::support::log_debug(logger, "Submitting HTTP request, URL: [" + url_str + "]," +
+                " options: [" + opts_json.dumps() + "] ...");
+        auto opts = wilton::http::client_request_config(std::move(opts_json));
+        if (request_data_len > 0) {
+            auto reqlen_u32 = static_cast<uint32_t> (request_data_len);
+            auto data_src = sl::io::string_source(std::string(request_data, reqlen_u32));
+            // do not use chunked post, as length is known
+            opts.options.send_request_body_content_length = true;
+            opts.options.request_body_content_length = reqlen_u32;
+            // POST will be used by default for this API call
+            auto res_empty = queue->impl().open_url(url_str, std::move(data_src), opts.options);
+            (void) res_empty;
+        } else {
+            // GET will be used by default for this API call
+            auto res_empty = queue->impl().open_url(url_str, opts.options);
+            (void) res_empty;
+        }
+        wilton::support::log_debug(logger, "HTTP request enqueued");
+        return nullptr;
+    } catch (const std::exception& e) {
+        return wilton::support::alloc_copy(TRACEMSG(e.what() + "\nException raised"));
+    }
+}
+
+char* wilton_HttpQueue_poll(wilton_HttpQueue* http,
+        char** response_list_json_out, int* response_list_json_len_out) /* noexcept */ {
+    if (nullptr == response_list_json_out) return wilton::support::alloc_copy(TRACEMSG(
+            "Null 'response_list_json_out' parameter specified"));
+    if (nullptr == response_list_json_len_out) return wilton::support::alloc_copy(TRACEMSG(
+            "Null 'response_list_json_len_out' parameter specified"));
+    try {
+        wilton::support::log_debug(logger, "Polling HTTP Queue ...");
+        // todo: add a timeout and a loop here
+        auto vec = http->impl().poll();
+        auto list = std::vector<sl::json::value>();
+        // todo: fixme
+        auto opts = wilton::http::client_request_config();
+        // end: fixme
+        for (auto& res : vec) {
+            auto json = resp_to_json(opts, res);
+            list.emplace_back(std::move(json));
+        }
+        auto json = sl::json::value(std::move(list));
+        auto span = wilton::support::make_json_buffer(json);
+        *response_list_json_out = span.data();
+        *response_list_json_len_out= span.size_int();
+        wilton::support::log_debug(logger, "HTTP request enqueued");
+        return nullptr;
+    } catch (const std::exception& e) {
+        return wilton::support::alloc_copy(TRACEMSG(e.what() + "\nException raised"));
+    }
+
+}

@@ -30,6 +30,8 @@
 extern "C" {
 #endif
 
+// HttpClient
+
 struct wilton_HttpClient;
 typedef struct wilton_HttpClient wilton_HttpClient;
 
@@ -145,7 +147,7 @@ char* wilton_HttpClient_close(
     // https://curl.haxx.se/libcurl/c/CURLOPT_SSL_CIPHER_LIST.html
     "sslCipherList": ""
  }
- {    
+ {
     // true if connection was successful
     "connectionSuccess": bool,
     "dataHex": "response_data in hex",
@@ -211,7 +213,7 @@ char* wilton_HttpClient_send_file(
         const char* url,
         int url_len,
         const char* file_path,
-        int file_path_len,       
+        int file_path_len,
         const char* request_metadata_json,
         int request_metadata_len,
         char** response_data_out,
@@ -236,6 +238,33 @@ char* wilton_HttpClient_send_file_by_parts(wilton_HttpClient* http,
         void (*finalizer_cb)(
                 void* finalizer_ctx,
                 int sent_successfully));
+
+// HttpQueue
+
+struct wilton_HttpQueue;
+typedef struct wilton_HttpQueue wilton_HttpQueue;
+
+char* wilton_HttpQueue_create(
+        wilton_HttpQueue** queue_out,
+        const char* conf_json,
+        int conf_json_len);
+
+char* wilton_HttpQueue_close(
+        wilton_HttpQueue* queue);
+
+char* wilton_HttpQueue_submit(
+        wilton_HttpQueue* http,
+        const char* url,
+        int url_len,
+        const char* request_data,
+        int request_data_len,
+        const char* request_metadata_json,
+        int request_metadata_len);
+
+char* wilton_HttpQueue_poll(
+        wilton_HttpQueue* http,
+        char** response_list_json_out,
+        int* response_list_json_len_out);
 
 #ifdef __cplusplus
 }

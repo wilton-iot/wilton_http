@@ -20,4 +20,9 @@ EXPORTS
     wilton_HttpClient_send_file
     wilton_HttpClient_send_file_by_parts
 
+    wilton_HttpQueue_create
+    wilton_HttpQueue_close
+    wilton_HttpQueue_submit
+    wilton_HttpQueue_poll
+
     wilton_module_init
