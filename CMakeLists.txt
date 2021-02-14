@@ -37,7 +37,8 @@ set ( ${PROJECT_NAME}_DEPS
         staticlib_http
         staticlib_tinydir
         staticlib_pimpl
-        libcurl )
+        libcurl
+        utf8cpp )
 staticlib_pkg_check_modules ( ${PROJECT_NAME}_DEPS_PC REQUIRED ${PROJECT_NAME}_DEPS )
 
 # library

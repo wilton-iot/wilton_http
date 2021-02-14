@@ -84,7 +84,7 @@ support::buffer httpclient_send_request(sl::io::span<const char> data) {
     auto json = sl::json::load(data);
     auto rurl = std::ref(sl::utils::empty_string());
     auto rdata = std::ref(sl::utils::empty_string());
-    std::string metadata = sl::utils::empty_string();
+    auto metadata = std::string();
     for (const sl::json::field& fi : json.as_object()) {
         auto& name = fi.name();
         if ("url" == name) {
@@ -118,7 +118,7 @@ support::buffer httpclient_send_file(sl::io::span<const char> data) {
     auto json = sl::json::load(data);
     auto rurl = std::ref(sl::utils::empty_string());
     auto rfile = std::ref(sl::utils::empty_string());
-    std::string metadata = sl::utils::empty_string();
+    auto metadata = std::string();
     auto rem = false;
     for (const sl::json::field& fi : json.as_object()) {
         auto& name = fi.name();

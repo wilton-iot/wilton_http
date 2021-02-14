@@ -41,6 +41,7 @@ class client_request_config {
 public:
     sl::http::request_options options;
     std::string respone_data_file_path;
+    bool respone_data_hex = false;
 
     client_request_config(const client_request_config&) = delete;
 
@@ -48,11 +49,13 @@ public:
 
     client_request_config(client_request_config&& other) :
     options(std::move(other.options)),
-    respone_data_file_path(std::move(other.respone_data_file_path)) { }
+    respone_data_file_path(std::move(other.respone_data_file_path)),
+    respone_data_hex(other.respone_data_hex) { }
 
     client_request_config& operator=(client_request_config&& other) {
         this->options = std::move(other.options);
         this->respone_data_file_path = std::move(other.respone_data_file_path);
+        this->respone_data_hex = other.respone_data_hex;
         return *this;
     }
 
@@ -138,8 +141,10 @@ public:
                 options.ssl_cipher_list = fi.as_string_nonempty_or_throw(name);
             } else if ("responseDataFilePath" == name) {
                 respone_data_file_path = fi.as_string_nonempty_or_throw(name);
+            } else if ("responseDataHex" == name) {
+                respone_data_hex = fi.as_bool_or_throw(name);
             } else {
-                throw support::exception(TRACEMSG("Unknown 'ClientRequest' field: [" + name + "]"));
+                throw support::exception(TRACEMSG("Unknown 'client_request_config' field: [" + name + "]"));
             }
         }
     }
@@ -186,7 +191,9 @@ public:
             {"cainfoFilename", options.cainfo_filename},
             {"crlfileFilename", options.crlfile_filename},
             {"sslCipherList", options.ssl_cipher_list},
-            {"responseDataFilePath", respone_data_file_path}
+
+            {"responseDataFilePath", respone_data_file_path},
+            {"responseDataHex", respone_data_hex}
         };
     }
 

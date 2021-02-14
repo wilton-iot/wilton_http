@@ -27,6 +27,8 @@
 #include <memory>
 #include <string>
 
+#include "utf8.h"
+
 #include "staticlib/config.hpp"
 #include "staticlib/http.hpp"
 #include "staticlib/io.hpp"
@@ -48,29 +50,38 @@ namespace { // anonymous
 const std::string logger = std::string("wilton.httpClient");
 
 sl::json::value resp_to_json(wilton::http::client_request_config& opts, sl::http::resource& resp) {
-    auto data_hex = std::string();
     if (opts.respone_data_file_path.empty()) {
-        auto dest = sl::io::string_sink();
-        {
-            auto sink = sl::io::make_hex_sink(dest);
-            sl::io::copy_all(resp, sink);
+        if (!opts.respone_data_hex) {
+            auto dest = sl::io::string_sink();
+            sl::io::copy_all(resp, dest);
+            auto& str_raw = dest.get_string();
+            if (utf8::is_valid(str_raw.begin(), str_raw.end())) {
+                return wilton::http::client_response::to_json(
+                        std::move(str_raw), resp, resp.get_info());
+            } else {
+                auto str_utf8 = std::string();
+                utf8::replace_invalid(str_raw.begin(), str_raw.end(), std::back_inserter(str_utf8));
+                return wilton::http::client_response::to_json(
+                        std::move(str_utf8), resp, resp.get_info());
+            }
+        } else {
+            auto dest = sl::io::string_sink();
+            {
+                auto sink = sl::io::make_hex_sink(dest);
+                sl::io::copy_all(resp, sink);
+            }
+            return wilton::http::client_response::to_json(
+                    std::move(dest.get_string()), resp, resp.get_info());
         }
-        data_hex = dest.get_string();
     } else {
         auto sink = sl::tinydir::file_sink(opts.respone_data_file_path);
         sl::io::copy_all(resp, sink);
-        auto data_str = sl::json::dumps({
+        auto data_res = sl::json::dumps({
             {"responseDataFilePath", opts.respone_data_file_path}
         });
-        auto dsrc = sl::io::string_source(data_str);
-        auto dest_hex = sl::io::string_sink();
-        {
-            auto sink_hex = sl::io::make_hex_sink(dest_hex);
-            sl::io::copy_all(dsrc, sink_hex);
-        }
-        data_hex = dest_hex.get_string();
+        return wilton::http::client_response::to_json(
+                std::move(data_res), resp, resp.get_info());
     }
-    return wilton::http::client_response::to_json(std::move(data_hex), resp, resp.get_info());
 }
 
 } // namespace
