@@ -259,7 +259,8 @@ char* wilton_HttpQueue_submit(
         const char* request_data,
         int request_data_len,
         const char* request_metadata_json,
-        int request_metadata_len);
+        int request_metadata_len,
+        long long int* request_id_out);
 
 char* wilton_HttpQueue_poll(
         wilton_HttpQueue* http,

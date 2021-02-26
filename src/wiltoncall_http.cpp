@@ -263,11 +263,14 @@ support::buffer httpclient_queue_submit(sl::io::span<const char> data) {
     // call wilton
     auto reg = queue_registry();
     auto queue = reg->peek().get();
+    long long int req_id = 0;
     char* err = wilton_HttpQueue_submit(queue, url.c_str(), static_cast<int>(url.length()),
             request_data.c_str(), static_cast<int>(request_data.length()), 
-            metadata.c_str(), static_cast<int>(metadata.length()));
+            metadata.c_str(), static_cast<int>(metadata.length()), std::addressof(req_id));
     if (nullptr != err) support::throw_wilton_error(err, TRACEMSG(err));
-    return support::make_null_buffer();
+    return support::make_json_buffer({
+        { "requestId" , static_cast<int64_t>(req_id) }
+    });
 }
 
 support::buffer httpclient_queue_poll(sl::io::span<const char>) {

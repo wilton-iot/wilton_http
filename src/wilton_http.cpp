@@ -358,7 +358,8 @@ char* wilton_HttpQueue_close(wilton_HttpQueue* queue) /* noexcept */ {
 
 char* wilton_HttpQueue_submit(wilton_HttpQueue* queue, const char* url, int url_len,
         const char* request_data, int request_data_len,
-        const char* request_metadata_json, int request_metadata_len) /* noexcept */ {
+        const char* request_metadata_json, int request_metadata_len,
+        long long int* request_id_out) /* noexcept */ {
     if (nullptr == queue) return wilton::support::alloc_copy(TRACEMSG("Null 'queue' parameter specified"));
     if (nullptr == url) return wilton::support::alloc_copy(TRACEMSG("Null 'url' parameter specified"));
     if (!sl::support::is_uint32_positive(url_len)) return wilton::support::alloc_copy(TRACEMSG(
@@ -367,6 +368,7 @@ char* wilton_HttpQueue_submit(wilton_HttpQueue* queue, const char* url, int url_
             "Invalid 'request_data_len' parameter specified: [" + sl::support::to_string(request_data_len) + "]"));
     if (!sl::support::is_uint32(request_metadata_len)) return wilton::support::alloc_copy(TRACEMSG(
             "Invalid 'request_metadata_len' parameter specified: [" + sl::support::to_string(request_metadata_len) + "]"));
+    if (nullptr == request_id_out) return wilton::support::alloc_copy(TRACEMSG("Null 'request_id_out' parameter specified"));
     try {
         auto url_str = std::string(url, static_cast<uint32_t> (url_len));
         auto opts_json = sl::json::value();
@@ -384,11 +386,19 @@ char* wilton_HttpQueue_submit(wilton_HttpQueue* queue, const char* url, int url_
             opts.options.request_body_content_length = reqlen_u32;
             // POST will be used by default for this API call
             auto res_empty = queue->impl().open_url(url_str, std::move(data_src), opts.options);
-            (void) res_empty;
+            *request_id_out = static_cast<long long int>(res_empty.get_id());
+        } else if (!opts.request_data_file_path.empty()) {
+            auto data_src = sl::tinydir::file_source(opts.request_data_file_path);
+            // do not use chunked post, as length is known
+            opts.options.send_request_body_content_length = true;
+            opts.options.request_body_content_length = static_cast<uint32_t>(data_src.size());
+            // POST will be used by default for this API call
+            auto res_empty = queue->impl().open_url(url_str, std::move(data_src), opts.options);
+            *request_id_out = static_cast<long long int>(res_empty.get_id());
         } else {
             // GET will be used by default for this API call
             auto res_empty = queue->impl().open_url(url_str, opts.options);
-            (void) res_empty;
+            *request_id_out = static_cast<long long int>(res_empty.get_id());
         }
         wilton::support::log_debug(logger, "HTTP request enqueued");
         return nullptr;

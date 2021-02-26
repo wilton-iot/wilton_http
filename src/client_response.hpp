@@ -46,8 +46,10 @@ public:
         });
         std::vector<sl::json::field> hfields = sl::ranges::emplace_to_vector(std::move(ha));
         return {
+            {"requestId", static_cast<int64_t>(resource.get_id())},
             {"connectionSuccess", resource.connection_successful()},
             {"data", std::move(data)},
+            {"dataFile", resource.get_response_data_file()},
             {"headers", std::move(hfields)},
             {"effectiveUrl", info.effective_url},
             {"responseCode", static_cast<int64_t> (resource.get_status_code())},

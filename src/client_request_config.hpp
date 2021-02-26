@@ -40,6 +40,7 @@ namespace http {
 class client_request_config {
 public:
     sl::http::request_options options;
+    std::string request_data_file_path;
     std::string respone_data_file_path;
     bool respone_data_hex = false;
 
@@ -49,11 +50,13 @@ public:
 
     client_request_config(client_request_config&& other) :
     options(std::move(other.options)),
+    request_data_file_path(std::move(other.request_data_file_path)),
     respone_data_file_path(std::move(other.respone_data_file_path)),
     respone_data_hex(other.respone_data_hex) { }
 
     client_request_config& operator=(client_request_config&& other) {
         this->options = std::move(other.options);
+        this->request_data_file_path = std::move(other.request_data_file_path);
         this->respone_data_file_path = std::move(other.respone_data_file_path);
         this->respone_data_hex = other.respone_data_hex;
         return *this;
@@ -112,9 +115,9 @@ public:
             } else if ("useragent" == name) {
                 options.useragent = fi.as_string_nonempty_or_throw(name);
             } else if ("maxSentSpeedLargeBytesPerSecond" == name) {
-                options.max_sent_speed_large_bytes_per_second = fi.as_uint32_positive_or_throw(name);
+                options.max_sent_speed_large_bytes_per_second = fi.as_uint32_or_throw(name);
             } else if ("maxRecvSpeedLargeBytesPerSecond" == name) {
-                options.max_recv_speed_large_bytes_per_second = fi.as_uint32_positive_or_throw(name);
+                options.max_recv_speed_large_bytes_per_second = fi.as_uint32_or_throw(name);
             } else if ("sslcertFilename" == name) {
                 options.sslcert_filename = fi.as_string_nonempty_or_throw(name);
             } else if ("sslcertype" == name) {
@@ -139,8 +142,12 @@ public:
                 options.crlfile_filename = fi.as_string_nonempty_or_throw(name);
             } else if ("sslCipherList" == name) {
                 options.ssl_cipher_list = fi.as_string_nonempty_or_throw(name);
+            } else if ("requestDataFilePath" == name) {
+                request_data_file_path = fi.as_string_nonempty_or_throw(name);
             } else if ("responseDataFilePath" == name) {
                 respone_data_file_path = fi.as_string_nonempty_or_throw(name);
+                options.polling_response_body_file_path = std::string(
+                        respone_data_file_path.data(), respone_data_file_path.length());
             } else if ("responseDataHex" == name) {
                 respone_data_hex = fi.as_bool_or_throw(name);
             } else {
@@ -192,7 +199,9 @@ public:
             {"crlfileFilename", options.crlfile_filename},
             {"sslCipherList", options.ssl_cipher_list},
 
-            {"responseDataFilePath", respone_data_file_path},
+            {"requestDataFilePath", request_data_file_path.empty() },
+            {"responseDataFilePath", !respone_data_file_path.empty() ?
+                    respone_data_file_path : options.polling_response_body_file_path },
             {"responseDataHex", respone_data_hex}
         };
     }
