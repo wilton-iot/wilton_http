@@ -48,6 +48,7 @@ public:
         return {
             {"requestId", static_cast<int64_t>(resource.get_id())},
             {"connectionSuccess", resource.connection_successful()},
+            {"error", resource.get_error()},
             {"data", std::move(data)},
             {"dataFile", resource.get_response_data_file()},
             {"headers", std::move(hfields)},

@@ -142,6 +142,8 @@ public:
                 options.crlfile_filename = fi.as_string_nonempty_or_throw(name);
             } else if ("sslCipherList" == name) {
                 options.ssl_cipher_list = fi.as_string_nonempty_or_throw(name);
+            } else if ("queueResponseMaxSizeBytes" == name) {
+                options.polling_response_body_max_size_bytes = fi.as_uint32_or_throw(name);
             } else if ("requestDataFilePath" == name) {
                 request_data_file_path = fi.as_string_nonempty_or_throw(name);
             } else if ("responseDataFilePath" == name) {
@@ -198,6 +200,7 @@ public:
             {"cainfoFilename", options.cainfo_filename},
             {"crlfileFilename", options.crlfile_filename},
             {"sslCipherList", options.ssl_cipher_list},
+            {"queueResponseMaxSizeBytes", options.polling_response_body_max_size_bytes},
 
             {"requestDataFilePath", request_data_file_path.empty() },
             {"responseDataFilePath", !respone_data_file_path.empty() ?
