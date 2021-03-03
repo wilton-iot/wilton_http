@@ -435,7 +435,7 @@ char* wilton_HttpQueue_poll(wilton_HttpQueue* queue, int min_requests_to_finish,
                 " enqueued requests count: [" + sl::support::to_string(enqueued) + "]," +
                 " poll period: [" + sl::support::to_string(poll_period_millis) + "] ...");
         if (min_reqs > enqueued) {
-            min_reqs = enqueued;
+            min_reqs = static_cast<uint32_t>(enqueued);
         }
         auto vec = std::vector<sl::http::resource>();
         uint64_t start = sl::utils::current_time_millis_steady();

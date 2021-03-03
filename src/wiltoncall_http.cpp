@@ -293,7 +293,8 @@ support::buffer httpclient_queue_poll(sl::io::span<const char> data) {
     auto queue = reg->peek().get();
     char* out = nullptr;
     int out_len = 0;
-    char* err = wilton_HttpQueue_poll(queue, min_requests_to_finish, poll_period_millis,
+    char* err = wilton_HttpQueue_poll(queue, 
+            static_cast<int>(min_requests_to_finish), static_cast<int>(poll_period_millis),
             std::addressof(out), std::addressof(out_len));
     if (nullptr != err) support::throw_wilton_error(err, TRACEMSG(err));
     return support::wrap_wilton_buffer(out, out_len);
