@@ -42,7 +42,7 @@ public:
     sl::http::request_options options;
     std::string request_data_file_path;
     std::string respone_data_file_path;
-    bool respone_data_hex = false;
+    bool response_data_hex = false;
 
     client_request_config(const client_request_config&) = delete;
 
@@ -52,13 +52,13 @@ public:
     options(std::move(other.options)),
     request_data_file_path(std::move(other.request_data_file_path)),
     respone_data_file_path(std::move(other.respone_data_file_path)),
-    respone_data_hex(other.respone_data_hex) { }
+    response_data_hex(other.response_data_hex) { }
 
     client_request_config& operator=(client_request_config&& other) {
         this->options = std::move(other.options);
         this->request_data_file_path = std::move(other.request_data_file_path);
         this->respone_data_file_path = std::move(other.respone_data_file_path);
-        this->respone_data_hex = other.respone_data_hex;
+        this->response_data_hex = other.response_data_hex;
         return *this;
     }
 
@@ -151,62 +151,16 @@ public:
                 options.polling_response_body_file_path = std::string(
                         respone_data_file_path.data(), respone_data_file_path.length());
             } else if ("responseDataHex" == name) {
-                respone_data_hex = fi.as_bool_or_throw(name);
+                response_data_hex = fi.as_bool_or_throw(name);
             } else {
                 throw support::exception(TRACEMSG("Unknown 'client_request_config' field: [" + name + "]"));
             }
         }
-    }
-
-    sl::json::value to_json() const {
-        auto ha = sl::ranges::transform(options.headers, [](const std::pair<std::string, std::string>& el) {
-            return sl::json::field{el.first, el.second};
+        options.user_options = sl::json::dumps({
+            { "requestDataFilePath", request_data_file_path },
+            { "responseDataFilePath", respone_data_file_path },
+            { "responseDataHex", response_data_hex }
         });
-        std::vector<sl::json::field> hfields = sl::ranges::emplace_to_vector(std::move(ha));
-        return {
-            {"headers", std::move(hfields)},
-            {"method", options.method},
-            {"abortOnConnectError", options.abort_on_connect_error},
-            {"abortOnResponseError", options.abort_on_response_error},
-            {"maxNumberOfResponseHeaders", options.max_number_of_response_headers},
-            {"consumerThreadWakeupTimeoutMillis", options.consumer_thread_wakeup_timeout_millis},
-            {"forceHttp10", options.force_http_10},
-            {"noprogress", options.noprogress},
-            {"nosignal", options.nosignal},
-            {"failonerror", options.failonerror},
-            {"pathAsIs", options.path_as_is},
-            {"tcpNodelay", options.tcp_nodelay},
-            {"tcpKeepalive", options.tcp_keepalive},
-            {"tcpKeepidleSecs", options.tcp_keepidle_secs},
-            {"tcpKeepintvlSecs", options.tcp_keepintvl_secs},
-            {"connecttimeoutMillis", options.connecttimeout_millis},
-            {"timeoutMillis", options.timeout_millis},
-            {"buffersizeBytes", options.buffersize_bytes},
-            {"acceptEncoding", options.accept_encoding},
-            {"followlocation", options.followlocation},
-            {"maxredirs", options.maxredirs},
-            {"useragent", options.useragent},
-            {"maxSentSpeedLargeBytesPerSecond", options.max_sent_speed_large_bytes_per_second},
-            {"maxRecvSpeedLargeBytesPerSecond", options.max_recv_speed_large_bytes_per_second},
-            {"sslcertFilename", options.sslcert_filename},
-            {"sslcertype", options.sslcertype},
-            {"sslkeyFilename", options.sslkey_filename},
-            {"sslKeyType", options.ssl_key_type},
-            {"sslKeypasswd", options.ssl_keypasswd},
-            {"requireTls", options.require_tls},
-            {"sslVerifyhost", options.ssl_verifyhost},
-            {"sslVerifypeer", options.ssl_verifypeer},
-            {"sslVerifystatus", options.ssl_verifystatus},
-            {"cainfoFilename", options.cainfo_filename},
-            {"crlfileFilename", options.crlfile_filename},
-            {"sslCipherList", options.ssl_cipher_list},
-            {"queueResponseMaxSizeBytes", options.polling_response_body_max_size_bytes},
-
-            {"requestDataFilePath", request_data_file_path.empty() },
-            {"responseDataFilePath", !respone_data_file_path.empty() ?
-                    respone_data_file_path : options.polling_response_body_file_path },
-            {"responseDataHex", respone_data_hex}
-        };
     }
 
 };

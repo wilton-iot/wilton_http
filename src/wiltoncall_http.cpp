@@ -273,12 +273,28 @@ support::buffer httpclient_queue_submit(sl::io::span<const char> data) {
     });
 }
 
-support::buffer httpclient_queue_poll(sl::io::span<const char>) {
+support::buffer httpclient_queue_poll(sl::io::span<const char> data) {
+    // json parse
+    auto json = sl::json::load(data);
+    int64_t min_requests_to_finish = 0;
+    int64_t poll_period_millis = 0;
+    for (const sl::json::field& fi : json.as_object()) {
+        auto& name = fi.name();
+        if ("minResponsesCount" == name) {
+            min_requests_to_finish = fi.as_int64_or_throw(name);
+        } else if ("pollPeriodMillis" == name) {
+            poll_period_millis = fi.as_int64_or_throw(name);
+        } else {
+            throw support::exception(TRACEMSG("Unknown data field: [" + name + "]"));
+        }
+    }
+    // call wilton
     auto reg = queue_registry();
     auto queue = reg->peek().get();
     char* out = nullptr;
     int out_len = 0;
-    char* err = wilton_HttpQueue_poll(queue, std::addressof(out), std::addressof(out_len));
+    char* err = wilton_HttpQueue_poll(queue, min_requests_to_finish, poll_period_millis,
+            std::addressof(out), std::addressof(out_len));
     if (nullptr != err) support::throw_wilton_error(err, TRACEMSG(err));
     return support::wrap_wilton_buffer(out, out_len);
 }

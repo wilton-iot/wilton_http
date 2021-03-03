@@ -64,8 +64,12 @@ public:
             auto& name = fi.name();
             if ("multiThreaded" == name) {
                 this->use_multi_threaded_session = fi.as_bool_or_throw(name);
+            } else if ("requestsQueueMaxSize" == name) {
+                this->options.requests_queue_max_size = fi.as_uint32_positive_or_throw(name);
             } else if ("fdsetTimeoutMillis" == name) {
                 this->options.fdset_timeout_millis = fi.as_uint32_positive_or_throw(name);
+            } else if ("socketSelectTimeoutMillis" == name) {
+                this->options.socket_select_max_timeout_millis = fi.as_uint32_positive_or_throw(name);
             } else if ("maxHostConnections" == name) {
                 this->options.max_host_connections = fi.as_uint32_positive_or_throw(name);
             } else if ("maxTotalConnections" == name) {
@@ -77,17 +81,6 @@ public:
             }
         }
     }
-
-    sl::json::value to_json() const {
-        return {
-            { "multiThreaded", use_multi_threaded_session },
-            { "fdsetTimeoutMillis", options.fdset_timeout_millis },
-            { "maxHostConnections", options.max_host_connections },
-            { "maxTotalConnections", options.max_total_connections },
-            { "maxconnects", options.maxconnects }
-        };
-    }
-    
 };
 
 } // namespace

@@ -264,6 +264,8 @@ char* wilton_HttpQueue_submit(
 
 char* wilton_HttpQueue_poll(
         wilton_HttpQueue* http,
+        int min_requests_to_finish,
+        int poll_period_millis,
         char** response_list_json_out,
         int* response_list_json_len_out);
 

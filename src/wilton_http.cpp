@@ -24,8 +24,10 @@
 #include "wilton/wilton_http.h"
 
 #include <array>
+#include <chrono>
 #include <memory>
 #include <string>
+#include <thread>
 
 #include "utf8.h"
 
@@ -33,6 +35,7 @@
 #include "staticlib/http.hpp"
 #include "staticlib/io.hpp"
 #include "staticlib/json.hpp"
+#include "staticlib/support.hpp"
 #include "staticlib/utils.hpp"
 #include "staticlib/tinydir.hpp"
 
@@ -49,9 +52,12 @@ namespace { // anonymous
 
 const std::string logger = std::string("wilton.httpClient");
 
-sl::json::value resp_to_json(wilton::http::client_request_config& opts, sl::http::resource& resp) {
-    if (opts.respone_data_file_path.empty()) {
-        if (!opts.respone_data_hex) {
+sl::json::value resp_to_json(sl::http::resource& resp, bool response_data_file_written = false) {
+    auto json = sl::json::loads(resp.get_request_options().user_options);
+    auto& response_data_file_path = json["responseDataFilePath"].as_string();
+    auto response_data_in_hex = json["responseDataHex"].as_bool();
+    if (response_data_file_path.empty()) {
+        if (!response_data_in_hex) {
             auto dest = sl::io::string_sink();
             sl::io::copy_all(resp, dest);
             auto& str_raw = dest.get_string();
@@ -74,10 +80,12 @@ sl::json::value resp_to_json(wilton::http::client_request_config& opts, sl::http
                     std::move(dest.get_string()), resp, resp.get_info());
         }
     } else {
-        auto sink = sl::tinydir::file_sink(opts.respone_data_file_path);
-        sl::io::copy_all(resp, sink);
+        if (!response_data_file_written) {
+            auto sink = sl::tinydir::file_sink(response_data_file_path);
+            sl::io::copy_all(resp, sink);
+        }
         auto data_res = sl::json::dumps({
-            {"responseDataFilePath", opts.respone_data_file_path}
+            {"responseDataFilePath", response_data_file_path}
         });
         return wilton::http::client_response::to_json(
                 std::move(data_res), resp, resp.get_info());
@@ -190,7 +198,7 @@ char* wilton_HttpClient_execute(wilton_HttpClient* http, const char* url, int ur
         }();
         wilton::support::log_debug(logger,
                 "HTTP request complete, status code: [" + sl::support::to_string(resp.get_status_code()) + "]");
-        auto resp_complete = resp_to_json(opts, resp);
+        auto resp_complete = resp_to_json(resp);
         auto span = wilton::support::make_json_buffer(resp_complete);
         *response_data_out = span.data();
         *response_data_len_out = span.size_int();
@@ -237,7 +245,7 @@ char* wilton_HttpClient_send_file(wilton_HttpClient* http, const char* url, int 
         sl::http::resource resp = http->impl().open_url(url_str, std::move(fd), opts.options);
         wilton::support::log_debug(logger,
                 "HTTP file send complete, status code: [" + sl::support::to_string(resp.get_status_code()) + "]");
-        auto resp_complete = resp_to_json(opts, resp);
+        auto resp_complete = resp_to_json(resp);
         if (nullptr != finalizer_cb) {
             finalizer_cb(finalizer_ctx, 1);
         }
@@ -407,29 +415,57 @@ char* wilton_HttpQueue_submit(wilton_HttpQueue* queue, const char* url, int url_
     }
 }
 
-char* wilton_HttpQueue_poll(wilton_HttpQueue* http,
-        char** response_list_json_out, int* response_list_json_len_out) /* noexcept */ {
+char* wilton_HttpQueue_poll(wilton_HttpQueue* queue, int min_requests_to_finish,
+        int poll_period_millis, char** response_list_json_out, int* response_list_json_len_out) /* noexcept */ {
+    if (nullptr == queue) return wilton::support::alloc_copy(TRACEMSG("Null 'queue' parameter specified"));
+    if (!sl::support::is_uint32(min_requests_to_finish)) return wilton::support::alloc_copy(TRACEMSG(
+            "Invalid 'min_requests_to_finish' parameter specified: [" + sl::support::to_string(min_requests_to_finish) + "]"));
+    if (!sl::support::is_uint32(poll_period_millis)) return wilton::support::alloc_copy(TRACEMSG(
+            "Invalid 'poll_period_millis' parameter specified: [" + sl::support::to_string(poll_period_millis) + "]"));
     if (nullptr == response_list_json_out) return wilton::support::alloc_copy(TRACEMSG(
             "Null 'response_list_json_out' parameter specified"));
     if (nullptr == response_list_json_len_out) return wilton::support::alloc_copy(TRACEMSG(
             "Null 'response_list_json_len_out' parameter specified"));
     try {
-        wilton::support::log_debug(logger, "Polling HTTP Queue ...");
-        // todo: add a timeout and a loop here
-        auto vec = http->impl().poll();
+        uint32_t min_reqs = static_cast<uint32_t>(min_requests_to_finish);
+        uint32_t poll_period = static_cast<uint32_t>(poll_period_millis);
+        size_t enqueued = queue->impl().enqueued_requests_count();
+        wilton::support::log_debug(logger, std::string() + "Polling HTTP Queue," +
+                " min requests: [" + sl::support::to_string(min_requests_to_finish) + "]," +
+                " enqueued requests count: [" + sl::support::to_string(enqueued) + "]," +
+                " poll period: [" + sl::support::to_string(poll_period_millis) + "] ...");
+        if (min_reqs > enqueued) {
+            min_reqs = enqueued;
+        }
+        auto vec = std::vector<sl::http::resource>();
+        uint64_t start = sl::utils::current_time_millis_steady();
+        for (;;){
+            auto polled = queue->impl().poll();
+            for (auto&& req : polled) {
+                vec.emplace_back(std::move(req));
+            }
+            if (vec.size() >= min_reqs) {
+                break;
+            }
+            uint64_t end = sl::utils::current_time_millis_steady();
+            uint64_t elapsed = end - start;
+            uint64_t to_sleep = poll_period - elapsed;
+            if (to_sleep > 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(to_sleep));
+            }
+        }
+        auto vec_size = vec.size();
         auto list = std::vector<sl::json::value>();
-        // todo: fixme
-        auto opts = wilton::http::client_request_config();
-        // end: fixme
         for (auto& res : vec) {
-            auto json = resp_to_json(opts, res);
+            auto json = resp_to_json(res, true);
             list.emplace_back(std::move(json));
         }
         auto json = sl::json::value(std::move(list));
         auto span = wilton::support::make_json_buffer(json);
         *response_list_json_out = span.data();
         *response_list_json_len_out= span.size_int();
-        wilton::support::log_debug(logger, "HTTP request enqueued");
+        wilton::support::log_debug(logger,
+                "Poll complete, finished requests count: [" + sl::support::to_string(vec_size) + "]");
         return nullptr;
     } catch (const std::exception& e) {
         return wilton::support::alloc_copy(TRACEMSG(e.what() + "\nException raised"));
